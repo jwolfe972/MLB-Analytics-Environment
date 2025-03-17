@@ -1,0 +1,11 @@
+pandas
+pybaseball
+numpy
+apache-airflow
+SQLAlchemy
+pyodbc
+psycopg2-binary
+requests
+MLB-StatsAPI
+beautifulsoup4
+statistics

@@ -1,0 +1,10 @@
+streamlit
+pandas
+pybaseball
+MLB-StatsAPI
+numpy
+streamlit-card
+apache-airflow
+SQLAlchemy
+pyodbc
+seaborn
