@@ -27,6 +27,22 @@ from statistics import mean
 import os
 from datetime import datetime, timedelta
 
+## imports specifically for MLFlow Model Genration/Logging
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LinearRegression, RidgeClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.manifold import TSNE
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, f1_score, recall_score, precision_score
+from sklearn.preprocessing import MinMaxScaler
+import mlflow
+from mlflow.models import infer_signature
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics.pairwise import rbf_kernel
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 
 
 # VARIABLES
@@ -689,6 +705,148 @@ def remove_temp_file():
     os.remove(f'{os.getcwd()}/data/temp.csv')
     print(f'Temp File Removed!!')
 
+
+def load_baseball_fg_team_game_data(year_threshold: int):
+    try:
+        conn = psycopg2.connect(
+            dbname="MLB_DATA",
+            user="user",
+            password="password",
+            host="postgres",
+            port="5432"
+        )
+
+        data = pd.read_sql(f'SELECT * FROM baseball_stats WHERE EXTRACT(YEAR FROM Date) >= {year_threshold}', con=conn)
+
+
+        print(data.head())
+        print(data.describe())
+        print(data.info())
+
+        return data
+
+    except psycopg2.Error as e:
+        print("Error connecting to PostgreSQL:", e)
+        raise  # raise error for error
+
+
+def generate_game_model(data: pd.DataFrame):
+    minmax_scaler = MinMaxScaler( feature_range=(0,1))
+
+    # Load and preprocess data
+    #data = pd.read_csv('stats.csv')
+    #data = data.loc[:, ~data.columns.str.contains('^Unnamed')]
+    data['runs_game'] = data['total_runs']/data['total_games']
+    data = data.drop_duplicates(keep='first')
+
+
+
+    #data['L10'] = data['Win?'].rolling(window=10, min_periods=1).sum()
+
+    #Differentiate between hitting statistics and pitching statistics
+    hitting_stats = ['avg', 'obp', 'slg', 'wrc_plus', 'war', 'k_percentage', 'bb_percentage', 'bsr', 'avg_5_players', 'obp_5_players', 'SLG_5_Players', 'WAR_5_Players', 'WRC_plus_5_Players', 'K_Percentage_5_Players', 'BB_Percentage_5 Players', 'AVG_Week', 'OBP_Week', 'SLG_Week', 'WAR_Week', 'WRC+/Week', 'K Percentage/Week', 'BB Percentage/Week', 'runs_game']
+    pitching_stats = ['Opposing K/9', 'Opposing HR/9', 'Opposing BB/9', 'ERA', 'Opposing War', 'Opposing K/9/5 Players', 'Opposing BB/9/5 Players', 'ERA/5 Players', 'Opposing WAR/5 Players', 'Opposing K/9/Week', 'Opposing BB/9/Week', 'ERA/Week', 'Opposing WAR/Week']
+
+    fixed_hitter_stats = []
+    fixed_pitcher_stats = []
+    for i in hitting_stats:
+        i = str(i).lower()
+        i = i.replace(' ', '_')
+        i = i.replace('/', '_')
+        i = i.replace('+', '_plus')
+        i = i.replace('?', '')
+        fixed_hitter_stats.append(i)
+
+    for i in pitching_stats:
+        i = i = str(i).lower()
+        i = i.replace(' ', '_')
+        i = i.replace('/', '_')
+        i = i.replace('+', '_plus')
+        i = i.replace('?', '')
+        fixed_pitcher_stats.append(i)
+
+
+    #Separate between X and y datasets
+    features = fixed_hitter_stats + fixed_hitter_stats
+
+
+    X_normalized = minmax_scaler.fit_transform(data[features]) 
+    Y = data['win']
+
+
+    X_df = pd.DataFrame(X_normalized, columns=features)
+    X_df['win'] = Y
+    # train = data.sample(frac=0.8, random_state=42)
+    # test = data.drop(train.index)
+
+    X_train, X_test, Y_train, Y_test = train_test_split(data[features], Y, test_size=.2)
+
+
+
+
+
+
+    # X_train = train.drop(['Runs Scored', 'Win?', 'Date', 'Offensive Team', 'Defensive Team', 'Total Games', 'Total Runs', 'RBIs'], axis=1)
+    # X_train = X_train[features]
+
+    # X_test = test.drop(['Runs Scored', 'Win?', 'Date', 'Offensive Team', 'Defensive Team', 'Total Games', 'Total Runs', 'RBIs'], axis=1)
+    # X_test = X_test[features]
+    # y_train = train['Win?']
+    # y_test = test['Win?']
+
+    # X_train = minmax_scaler.fit_transform(X_train)
+    # X_test = minmax_scaler.fit_transform(X_test)
+
+    #Initialize and train the model to predict team wins
+
+
+    mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_experiment('MLB Win Prediction Experiment')
+
+    with mlflow.start_run():
+        params = {
+            'max_depth': 4,
+            'n_estimators': 101,
+            'learning_rate': .5
+        }
+
+        plt.figure(figsize=(30, 30))
+        sns.heatmap(X_df.corr(), annot=True,cmap="crest")
+        plt.savefig('corr_plot.png')
+        mlflow.log_artifact('corr_plot.png')
+
+
+        win_model = RidgeClassifier()
+        win_model.fit(X_train, Y_train)
+        predictions = win_model.predict(X_test)
+
+
+        accuracy = accuracy_score(Y_test, predictions)
+        f1 = f1_score(Y_test, predictions)
+        recall = recall_score(Y_test, predictions)
+        precision = precision_score(Y_test, predictions)
+        mlflow.log_params(win_model.get_params())
+        mlflow.log_metric('Accuracy', accuracy)
+        mlflow.log_metric('F1', f1)
+        mlflow.log_metric('Recall', recall)
+        mlflow.log_metric('Precision', precision)
+
+        mlflow.set_tag('Training Data Run', 'MLP Classifier')
+
+        signature = infer_signature(X_train, win_model.predict(X_train))
+
+        model_info = mlflow.sklearn.log_model(
+            sk_model=win_model,
+            artifact_path="win_model",
+            signature=signature,
+            input_example=X_train,
+            registered_model_name="Ridge_Classifier-MLB-ML"
+        )
+
+        print('Model Generation Complete!!')
+
+    
+
 with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,1, tz="America/Chicago"), schedule_interval=None, default_args=default_args ) as dag:
     with TaskGroup("load_baseball_stat_data") as load_baseball_stat_data:
         connection =  PythonOperator(
@@ -751,8 +909,26 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
 
         load_fangraph_data_task >> load_new_data_task >> remove_temp_file_task
 
+
+    with TaskGroup('train_model_mlflow') as generate_game_prediciton_model:
+        load_model_data = PythonOperator(
+            task_id='load_model_data',
+            python_callable=load_baseball_fg_team_game_data,
+            op_args=[2019],
+            dag=dag
+        )
+
+        gen_game_pred_model_task = PythonOperator(
+            task_id='generate-ml-model',
+            python_callable=generate_game_model,
+            op_args=[load_model_data.output]
+        )
+
+        load_model_data >> gen_game_pred_model_task
+        
+
     
     
 
 
-    load_baseball_stat_data >> load_fangraphs_model_data
+    load_baseball_stat_data >> load_fangraphs_model_data >> generate_game_prediciton_model

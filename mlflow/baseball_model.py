@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 #baseball_dataset.stats_per_year(2024)
 
 
+
 minmax_scaler = MinMaxScaler( feature_range=(0,1))
 
 # Load and preprocess data

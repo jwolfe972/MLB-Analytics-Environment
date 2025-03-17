@@ -9,3 +9,5 @@ requests
 MLB-StatsAPI
 beautifulsoup4
 statistics
+mlflow
+seaborn

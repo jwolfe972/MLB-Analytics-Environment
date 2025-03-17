@@ -68,7 +68,7 @@ services:
     - "5000:5000"
     - "5001:5001"  # MLflow Model Serving
     environment:
-      MLFLOW_TRACKING_URI: http://localhost:5000
+      MLFLOW_TRACKING_URI: http://0.0.0.0:5000
     container_name: mlflow
     networks:
       - my_network
@@ -320,3 +320,4 @@ volumes:
 
 networks:
   my_network:
+    driver: bridge
