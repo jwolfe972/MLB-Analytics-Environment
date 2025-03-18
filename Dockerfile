@@ -18,7 +18,7 @@ COPY . .
 
 ENV MLB_TEAM_LOGOS=/home/mlb_images/team_logos
 
-# Expose port 3000
+# Expose port 8051
 EXPOSE 8051
 
 # Run the Streamlit app
