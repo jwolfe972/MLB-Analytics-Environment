@@ -42,8 +42,8 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics.pairwise import rbf_kernel
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-
+from mlflow_provider.hooks.client import MLflowClientHook
+from mlflow_provider.operators.registry import CreateRegisteredModelOperator
 
 # VARIABLES
 ############################################################################################################
@@ -144,6 +144,10 @@ stats = {
 #Copy of the original stats dictionary to reference
 original_stats = stats.copy()
 
+
+MLFLOW_CONN_ID = "mlflow_default"
+EXPERIMENT_NAME = "MLB-GAME-PREDICTION"
+REGISTERED_MODEL_NAME = "MLB-Prediction-Model"
 ############################################################################################################
 def convert_to_binary(row):
     if row['win'] ==  1:
@@ -782,34 +786,10 @@ def generate_game_model(data: pd.DataFrame):
     X_train, X_test, Y_train, Y_test = train_test_split(data[features], Y, test_size=.2)
 
 
-
-
-
-
-    # X_train = train.drop(['Runs Scored', 'Win?', 'Date', 'Offensive Team', 'Defensive Team', 'Total Games', 'Total Runs', 'RBIs'], axis=1)
-    # X_train = X_train[features]
-
-    # X_test = test.drop(['Runs Scored', 'Win?', 'Date', 'Offensive Team', 'Defensive Team', 'Total Games', 'Total Runs', 'RBIs'], axis=1)
-    # X_test = X_test[features]
-    # y_train = train['Win?']
-    # y_test = test['Win?']
-
-    # X_train = minmax_scaler.fit_transform(X_train)
-    # X_test = minmax_scaler.fit_transform(X_test)
-
-    #Initialize and train the model to predict team wins
-
-
     mlflow.set_tracking_uri("http://mlflow:5000")
     mlflow.set_experiment('MLB Win Prediction Experiment')
 
     with mlflow.start_run():
-        params = {
-            'max_depth': 4,
-            'n_estimators': 101,
-            'learning_rate': .5
-        }
-
         plt.figure(figsize=(30, 30))
         sns.heatmap(X_df.corr(), annot=True,cmap="crest")
         plt.savefig('corr_plot.png')
@@ -843,8 +823,113 @@ def generate_game_model(data: pd.DataFrame):
             registered_model_name="Ridge_Classifier-MLB-ML"
         )
 
-        print('Model Generation Complete!!')
+        print(f'Model Generation Complete!! Model URI={model_info.model_uri}')
 
+# https://www.astronomer.io/docs/learn/airflow-mlflow
+def create_experiment(experiment_name):
+    """Create a new MLFlow experiment with a specified name.
+    Save artifacts in the default MLflow location."""
+
+    ts = datetime.now().strftime("%Y%m%d%H%M%s")
+
+    mlflow_hook = MLflowClientHook(mlflow_conn_id=MLFLOW_CONN_ID)
+    new_experiment_information = mlflow_hook.run(
+        endpoint="api/2.0/mlflow/experiments/create",
+        request_params={
+            "name": f"{ts}_{experiment_name}",
+        },
+    ).json()
+
+    # Extract and return the experiment ID
+    return new_experiment_information.get("experiment_id")
+
+
+def perform_model_training(data: pd.DataFrame, experiment_id: str):
+    minmax_scaler = MinMaxScaler( feature_range=(0,1))
+    data['runs_game'] = data['total_runs']/data['total_games']
+    data = data.drop_duplicates(keep='first')
+
+    mlflow.sklearn.autolog()
+    #Differentiate between hitting statistics and pitching statistics
+    hitting_stats = ['avg', 'obp', 'slg', 'wrc_plus', 'war', 'k_percentage', 'bb_percentage', 'bsr', 'avg_5_players', 'obp_5_players', 'SLG_5_Players', 'WAR_5_Players', 'WRC_plus_5_Players', 'K_Percentage_5_Players', 'BB_Percentage_5 Players', 'AVG_Week', 'OBP_Week', 'SLG_Week', 'WAR_Week', 'WRC+/Week', 'K Percentage/Week', 'BB Percentage/Week', 'runs_game']
+    pitching_stats = ['Opposing K/9', 'Opposing HR/9', 'Opposing BB/9', 'ERA', 'Opposing War', 'Opposing K/9/5 Players', 'Opposing BB/9/5 Players', 'ERA/5 Players', 'Opposing WAR/5 Players', 'Opposing K/9/Week', 'Opposing BB/9/Week', 'ERA/Week', 'Opposing WAR/Week']
+
+    fixed_hitter_stats = []
+    fixed_pitcher_stats = []
+    for i in hitting_stats:
+        i = str(i).lower()
+        i = i.replace(' ', '_')
+        i = i.replace('/', '_')
+        i = i.replace('+', '_plus')
+        i = i.replace('?', '')
+        fixed_hitter_stats.append(i)
+
+    for i in pitching_stats:
+        i = i = str(i).lower()
+        i = i.replace(' ', '_')
+        i = i.replace('/', '_')
+        i = i.replace('+', '_plus')
+        i = i.replace('?', '')
+        fixed_pitcher_stats.append(i)
+
+
+    #Separate between X and y datasets
+    features = fixed_hitter_stats + fixed_hitter_stats
+
+
+    X_normalized = minmax_scaler.fit_transform(data[features]) 
+    Y = data['win']
+
+
+    X_df = pd.DataFrame(X_normalized, columns=features)
+    X_df['win'] = Y
+
+    X_train, X_test, Y_train, Y_test = train_test_split(data[features], Y, test_size=.2)
+
+
+    mlflow.set_tracking_uri("http://mlflow:5000")
+    mlflow.set_experiment('MLB Win Prediction Experiment')
+
+    with mlflow.start_run(experiment_id=experiment_id, run_name='airflow-model-generation') as run:
+        plt.figure(figsize=(30, 30))
+        sns.heatmap(X_df.corr(), annot=True,cmap="crest")
+        plt.savefig('corr_plot.png')
+        mlflow.log_artifact('corr_plot.png')
+
+
+        win_model = RidgeClassifier()
+        win_model.fit(X_train, Y_train)
+        predictions = win_model.predict(X_test)
+
+
+        accuracy = accuracy_score(Y_test, predictions)
+        f1 = f1_score(Y_test, predictions)
+        recall = recall_score(Y_test, predictions)
+        precision = precision_score(Y_test, predictions)
+        mlflow.log_params(win_model.get_params())
+        mlflow.log_metric('Accuracy', accuracy)
+        mlflow.log_metric('F1', f1)
+        mlflow.log_metric('Recall', recall)
+        mlflow.log_metric('Precision', precision)
+
+        mlflow.set_tag('Training Data Run', 'MLP Classifier')
+
+        signature = infer_signature(X_train, win_model.predict(X_train))
+
+        # model_info = mlflow.sklearn.log_model(
+        #     sk_model=win_model,
+        #     artifact_path="win_model",
+        #     signature=signature,
+        #     input_example=X_train,
+        #     registered_model_name="Ridge_Classifier-MLB-ML"
+        # )
+
+        create_model = CreateRegisteredModelOperator(
+            task_id='create-model',
+            name=f'{experiment_id}-{REGISTERED_MODEL_NAME}'
+        )
+
+        
     
 
 with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,1, tz="America/Chicago"), schedule_interval=None, default_args=default_args ) as dag:
@@ -889,7 +974,7 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
             task_id='load-fangraphs-data',
             python_callable=scrape_f_graphs_team_data,
             dag=dag,
-            op_args=[2024, load_baseball_model_data_task_again.output ]
+            op_args=[2025, load_baseball_model_data_task_again.output ]
         )
 
         load_new_data_task = PythonOperator(
@@ -914,17 +999,38 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
         load_model_data = PythonOperator(
             task_id='load_model_data',
             python_callable=load_baseball_fg_team_game_data,
-            op_args=[2019],
+            op_args=[2010],
             dag=dag
         )
 
-        gen_game_pred_model_task = PythonOperator(
-            task_id='generate-ml-model',
-            python_callable=generate_game_model,
-            op_args=[load_model_data.output]
+        # produce_game_model = PythonOperator(
+        #     task_id='produce-game-model',
+        #     python_callable=generate_game_model,
+        #     op_args=[load_model_data.output],
+        #     dag=dag
+        # )
+
+        create_experiment_task = PythonOperator(
+            task_id='create-experiment-for-model',
+            python_callable=create_experiment,
+            dag=dag,
+            op_args=[EXPERIMENT_NAME]
         )
 
-        load_model_data >> gen_game_pred_model_task
+        perform_model_training_task = PythonOperator(
+            task_id='train-model-and-store',
+            python_callable=perform_model_training,
+            dag=dag,
+            op_args=[load_model_data.output, create_experiment_task.output]
+        )
+
+        # gen_game_pred_model_task = PythonOperator(
+        #     task_id='generate-ml-model',
+        #     python_callable=generate_game_model,
+        #     op_args=[load_model_data.output]
+        # )
+
+        load_model_data >> create_experiment_task >> perform_model_training_task
         
 
     

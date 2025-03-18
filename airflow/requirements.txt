@@ -11,3 +11,4 @@ beautifulsoup4
 statistics
 mlflow
 seaborn
+airflow-provider-mlflow

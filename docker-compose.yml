@@ -258,7 +258,12 @@ services:
         fi
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        echo "Almost Done!!!!"
+        echo "Adding Airflow Connection for MLFlow"
+        airflow connections add 'mlflow_default' --conn-type 'http' --conn-host 'http://mlflow' --conn-port '5000'
         exec /entrypoint airflow version
+
+
     # yamllint enable rule:line-length
 
     environment:

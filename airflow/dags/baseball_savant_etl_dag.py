@@ -108,6 +108,43 @@ def test_postgres_connection():
         print("Error connecting to PostgreSQL:", e)
         raise  # raise error for error
 
+def run_sql_file(file_path: str):
+    """Executes an SQL file in PostgreSQL using psycopg2."""
+    
+    # Establish a connection
+    conn = psycopg2.connect(
+        dbname="MLB_DATA",
+        user="user",
+        password="password",
+        host="postgres",
+        port="5432"
+    )
+        
+
+    cursor = conn.cursor()
+    
+    try:
+        # Read the SQL file
+        with open(file_path, "r", encoding="utf-8") as sql_file:
+            sql_script = sql_file.read()
+        
+        # Execute the SQL script
+        cursor.execute(sql_script)
+        
+        # Commit the transaction
+        conn.commit()
+        print(f"Successfully executed SQL file: {file_path}")
+    
+    except Exception as e:
+        conn.rollback()  # Rollback on error
+        print(f"Error executing SQL file: {e}")
+        raise
+    
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 def load_all_game_pk():
     try:
@@ -596,12 +633,19 @@ with DAG(dag_id='baseball-savant-etl-workflow', start_date=pendulum.datetime(202
             python_callable=test_postgres_connection,
             dag=dag
         )
+
+        execute_sql_file_for_creation = PythonOperator(
+            task_id='create-sql-tables',
+            python_callable=run_sql_file,
+            op_args=[f'{os.getcwd()}/sql_files/schema.sql'],
+            dag=dag
+        )
         get_pybabseball_data = PythonOperator(
             task_id='load_statcast_data',
             python_callable=load_statcast_data,
             dag=dag
         )
-        connection >> get_pybabseball_data
+        connection >>execute_sql_file_for_creation >>  get_pybabseball_data
 
     with TaskGroup("Load-DB-Current-DW-Info") as get_current_dw_info:
         game_pks = PythonOperator(

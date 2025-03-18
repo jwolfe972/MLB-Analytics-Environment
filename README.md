@@ -30,7 +30,7 @@
 
     Step 2: Make Sure the Docker Engine is running
 
-    Step 3: Run the command: docker-compose up -d <- This command builds the compose stacks. It takes a while to initially start.
+    Step 3: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
 
     Step 4: Once Apache Airflow is up, search for the ``load_mlb_game_prediction`` DAG and run the DAG to both create and populate the ML model database ** Also since this is web scraping sometimes it will error out, for that just clear the final state to re run from the error state so you won't lose progress in scraping
 
