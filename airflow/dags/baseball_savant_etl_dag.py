@@ -78,7 +78,7 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': pendulum.datetime(2025, 3, 1, tz="America/Chicago"),
+    'start_date': pendulum.datetime(2025, 3, 20, tz="America/Chicago"),
     'catchup': False
 }
 
@@ -625,7 +625,7 @@ def load_tables_many(df: pd.DataFrame, table_name):
 
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow', start_date=pendulum.datetime(2025,3,1, tz="America/Chicago"),schedule_interval=None, default_args=default_args) as dag:
+with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 9 * * *", default_args=default_args) as dag:
 
     with TaskGroup("load_all_baseball_data") as load_statcast_data_group:
         connection = PythonOperator(

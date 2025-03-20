@@ -1,4 +1,4 @@
-# MLB Game Prediction Model Project CSCE 5214 **Work-In-Progress**
+# MLB Game Prediction Model Project CSCE 5214 ⚠️**Work-In-Progress**⚠️
 
 ## Author: Jordan D. Wolfe [jwolfe972@gmail.com](mailto:jwolfe972@gmail.com)
 
