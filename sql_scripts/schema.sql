@@ -178,3 +178,9 @@ CREATE TABLE IF NOT EXISTS baseball_stats (
     Win BOOLEAN,
     UNIQUE(Date, Offensive_Team, Defensive_Team, Total_Games)
 );
+
+CREATE TABLE IF NOT EXISTS game_predictions(
+
+    GAME_PK INT NOT NULL PRIMARY KEY,
+    TEAM_WINNER_ABBREV VARCHAR(5) NOT NULL
+);

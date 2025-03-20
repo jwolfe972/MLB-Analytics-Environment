@@ -930,7 +930,12 @@ def perform_model_training(data: pd.DataFrame, experiment_id: str):
         )
 
         
-    
+def load_ml_model(model_uri: str):
+    pass
+
+
+def make_game_predicitions(model):
+    pass
 
 with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,1, tz="America/Chicago"), schedule_interval=None, default_args=default_args ) as dag:
     with TaskGroup("load_baseball_stat_data") as load_baseball_stat_data:
@@ -1024,13 +1029,27 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
             op_args=[load_model_data.output, create_experiment_task.output]
         )
 
+        load_ml_model_task = PythonOperator(
+            task_id='load-ml-model-task',
+            python_callable=load_ml_model,
+            op_args=['dummy'],
+            dag=dag
+        )
+
+        make_game_predictions_task = PythonOperator(
+            task_id='make_game_predictions-task',
+            python_callable=make_game_predicitions,
+            op_args=['dummy'],
+            dag=dag
+        )
+
         # gen_game_pred_model_task = PythonOperator(
         #     task_id='generate-ml-model',
         #     python_callable=generate_game_model,
         #     op_args=[load_model_data.output]
         # )
 
-        load_model_data >> create_experiment_task >> perform_model_training_task
+        load_model_data >> create_experiment_task >> perform_model_training_task >> load_ml_model_task >> make_game_predictions_task
         
 
     
