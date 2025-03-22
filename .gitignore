@@ -2,3 +2,5 @@
 /mlflow/mlartifacts
 /mlflow/mlruns
 /airflow/dags/__pycache__
+/venv
+/.idea

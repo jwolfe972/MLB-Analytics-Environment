@@ -12,3 +12,6 @@ statistics
 mlflow
 seaborn
 airflow-provider-mlflow
+pyspark
+apache-airflow-providers-common-compat==1.2.2
+apache-airflow-providers-apache-spark==4.11.3

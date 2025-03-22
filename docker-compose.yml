@@ -47,7 +47,9 @@ x-airflow-common:
 services:
   my_custom_container:
     # image: mlb-predict
-    build: .
+    build:
+      context: ./streamlit
+      dockerfile: Dockerfile
     container_name: streamlit-app
     ports:
       - "8051:8051"
@@ -66,7 +68,7 @@ services:
       dockerfile: Dockerfile
     ports:
     - "5000:5000"
-    - "5001:5001"  # MLflow Model Serving
+    - "5001:5001"  # MLFlow Model Serving
     environment:
       MLFLOW_TRACKING_URI: http://0.0.0.0:5000
     container_name: mlflow
@@ -109,6 +111,42 @@ services:
       - my_network
     volumes:
       - mongo_data:/data/db
+  
+  grafana-mlb:
+    image: grafana/grafana:latest
+    container_name: grafana-mlb
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - my_network
+      
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080"  # Spark Web UI
+      - "7077:7077"  # Spark Master Port
+    networks:
+      - my_network
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    networks:
+      - my_network
 
   
 
@@ -130,11 +168,11 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-    command: webserver
+    command: webserver -p 8081
     ports:
-      - "8080:8080"
+      - "8081:8081"
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -163,8 +201,6 @@ services:
         condition: service_completed_successfully
     networks:
       - my_network   
-  
-
   
   airflow-worker:
     <<: *airflow-common
@@ -256,11 +292,11 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
-        mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         echo "Almost Done!!!!"
         echo "Adding Airflow Connection for MLFlow"
         airflow connections add 'mlflow_default' --conn-type 'http' --conn-host 'http://mlflow' --conn-port '5000'
+        airflow connections add 'pyspark-conn' --conn-type 'spark' --conn-host 'spark://spark-master' --conn-port '7077' --conn-extra '{"deploy_mode": "client", "spark_binary": "spark-submit"}'
         exec /entrypoint airflow version
 
 
@@ -322,6 +358,7 @@ services:
 volumes:
   pgdata:
   mongo_data:
+  grafana_data:
 
 networks:
   my_network:
