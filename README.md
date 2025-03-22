@@ -14,6 +14,8 @@
     - Apache Airflow (Automated Data Pipeline for updating data)
     - PostgreSQL (Storing Historical Data)
     - MLFlow (For ML Tracking, Storage and Deployment)
+    - ** Extra Spark (For Big Data Processing) **
+    - ** Extra Grafana (For Dashboarding)
     - Docker and Docker Compose (Stacking the application all together)
     
 
