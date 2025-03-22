@@ -43,11 +43,15 @@
 
 ```localhost:8051 -> Streamlit app```
 <br>
-```localhost:8080 -> Apache Airflow Web UI (default login is user:airflow pass:airflow)```
+```localhost:8081 -> Apache Airflow Web UI (default login is user:airflow pass:airflow)```
+<br>
+```localhost:8080 -> SparkUI```
 <br>
 ```localhost:5432 -> PostgreSQL Database (default login is user:user pass: password)```
 <br>
 ```localhost:5000 -> ML Flow UI ```
+<br>
+```localhost:3000 -> Grafana ```
 
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
