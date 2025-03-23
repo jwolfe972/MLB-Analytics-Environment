@@ -53,7 +53,11 @@
 <br>
 ```localhost:5000 -> ML Flow UI ```
 <br>
-```localhost:3000 -> Grafana ```
+```localhost:3000 -> Grafana (default login is user:admin pass: admin) ```
+
+
+### Note: For Freshly restarting the Containers and Volumes run this command:
+```docker compose down --volumes --remove-orphans ```
 
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
