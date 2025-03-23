@@ -16,20 +16,20 @@ WITH batting_stats AS (
         SUM(CASE WHEN play.events IN ('home_run', 'triple', 'double', 'single') THEN 1 ELSE 0 END) AS hit_count,
         SUM(CASE WHEN play.events IN ('home_run', 'triple', 'double', 'single', 'double_play', 'field_error', 'fielders_choice', 'fielders_choice_out', 'field_out', 'force_out', 'grounded_into_double_play', 'strikeout','strikeout_double_play', 'triple_play'  ) THEN 1 ELSE 0 END) AS total_ab
     FROM PLAY_INFO_DIM play
-    LEFT JOIN FactPitchByPitchInfo fact ON fact.PLAY_ID = play.PLAY_ID
+    LEFT JOIN PITCH_INFO_FACT fact ON fact.PLAY_ID = play.PLAY_ID
     LEFT JOIN HITTER_INFO_DIM batter ON batter.HITTER_ID = fact.BATTER_ID
     LEFT JOIN GAME_INFO_DIM game ON game.GAME_PK = fact.GAME_ID
-    WHERE game.game_type = 'R' AND game.game_year = 2024
+    WHERE game.game_type = 'R' AND game.game_year = 2023
     GROUP BY batter.HITTER_ID
 ),
 latest_team AS (
-    SELECT 
-        fact.BATTER_ID, 
-        pitch.HITTER_TEAM AS most_recent_team,
+    SELECT
+        fact.BATTER_ID,
+        fact.HITTER_TEAM AS most_recent_team,
         ROW_NUMBER() OVER (PARTITION BY fact.BATTER_ID ORDER BY game.game_date DESC) AS rn
-    FROM FactPitchByPitchInfo fact
-    LEFT JOIN PITCH_INFO_DIM pitch ON fact.PITCH_ID = pitch.PITCH_ID
+    FROM PITCH_INFO_FACT fact
 	LEFT JOIN GAME_INFO_DIM game on game.GAME_PK = fact.GAME_ID
+		WHERE game.game_year = 2023
 )
 , stats_table AS (
     SELECT 

@@ -14,8 +14,14 @@ import psycopg2
 from airflow.operators.python_operator import PythonOperator
 import numpy as np
 import pendulum
- 
+
+ # VARIABLES
 ############################################################################################################################
+START_DATE = '2025-01-01'
+
+# END_DATE = '2024-01-01'
+END_DATE = datetime.now().strftime('%Y-%m-%d')
+
 TABLE_TABLE_COLUMN_INSERT_DICT = {
 
     'HITTER_INFO_DIM': {
@@ -64,23 +70,17 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
     )'''
 },
 
-'FactPitchByPitchInfo': {
-
-    'columns': '(PITCHER_ID, BATTER_ID, PITCH_ID, HIT_ID, GAME_ID, PLAY_ID, COUNT, BASES, BASES_AFTER, RS_ON_PLAY)',
-    'values': '(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'
-}   
-
-   
-
 }
 
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': pendulum.datetime(2025, 3, 20, tz="America/Chicago"),
+    'start_date': pendulum.datetime(2025, 3, 21, tz="America/Chicago"),
     'catchup': False
 }
+
+
 
 
 
@@ -320,7 +320,7 @@ def discard_batter_ids(value):
 
 def load_statcast_data():
     cache.enable()
-    data = statcast('2024-03-01', datetime.now().strftime('%Y-%m-%d'))
+    data = statcast(START_DATE, END_DATE)
     #data = statcast('2023-03-01', '2023-09-30')
     print(data.head(10))
     return data
@@ -555,68 +555,6 @@ def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame
     return play_data
 
 
-# def transform_fact_table_data(full_pitch_by_pitch: pd.DataFrame, fct_game_pks: pd.DataFrame):
-#
-#
-#     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_pk'].isin(fct_game_pks['game_id'])]
-#
-#     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_type'].isin(['S', 'E'])]
-#
-#
-#     full_pitch_by_pitch['COUNT'] = full_pitch_by_pitch['balls'].astype(str) + '-' + full_pitch_by_pitch['strikes'].astype(str)
-#
-#     # Create BASES column
-#     full_pitch_by_pitch['BASES'] = full_pitch_by_pitch.apply(lambda row: f"{1 if pd.notna(row['on_1b']) else 0}-{1 if pd.notna(row['on_2b']) else 0}-{1 if pd.notna(row['on_3b']) else 0}", axis=1)
-#
-#     # Create RS_ON_PLAY column
-#     full_pitch_by_pitch['RS_ON_PLAY'] = full_pitch_by_pitch['post_bat_score'] - full_pitch_by_pitch['bat_score']
-#
-#     # create pitch ID
-#     full_pitch_by_pitch["PITCH_ID"] = (
-#     full_pitch_by_pitch["game_pk"].astype(str) +
-#     full_pitch_by_pitch["pitcher"].astype(str) +
-#     full_pitch_by_pitch["batter"].astype(str) +
-#     full_pitch_by_pitch["at_bat_number"].astype(str) +
-#     full_pitch_by_pitch["pitch_number"].astype(str) +
-#     full_pitch_by_pitch["inning"].astype(str) +
-#     full_pitch_by_pitch["inning_topbot"].astype(str)
-#     )
-#
-#     # create hit ID
-#     full_pitch_by_pitch["HIT_ID"] = np.where(
-#     full_pitch_by_pitch["type"] == "X",
-#     full_pitch_by_pitch["game_pk"].astype(str) +
-#     full_pitch_by_pitch["batter"].astype(str) +
-#     full_pitch_by_pitch["at_bat_number"].astype(str) +
-#     full_pitch_by_pitch["inning"].astype(str) +
-#     full_pitch_by_pitch["inning_topbot"].astype(str),
-#     np.nan
-#     )
-#
-#     # create play ID
-#     full_pitch_by_pitch["PLAY_ID"] = np.where(
-#     full_pitch_by_pitch['events'].notna() & (full_pitch_by_pitch['events'] != ''),
-#     full_pitch_by_pitch["game_pk"].astype(str) +
-#     full_pitch_by_pitch["pitcher"].astype(str) +
-#     full_pitch_by_pitch["batter"].astype(str) +
-#     full_pitch_by_pitch["at_bat_number"].astype(str) +
-#     full_pitch_by_pitch["pitch_number"].astype(str) +
-#     full_pitch_by_pitch["inning"].astype(str) +
-#     full_pitch_by_pitch["inning_topbot"].astype(str),
-#     np.nan
-#     )
-#
-#     # Group by 'game_pk' and arrange by 'at_bat_number', then create 'BASES_AFTER'
-#     full_pitch_by_pitch = full_pitch_by_pitch.sort_values(by=['game_pk', 'at_bat_number', 'PITCH_ID'])
-#     full_pitch_by_pitch['BASES_AFTER'] = full_pitch_by_pitch.groupby('game_pk')['BASES'].shift(-1)
-#
-#     # Select relevant columns
-#     fact_tbl = full_pitch_by_pitch[['pitcher', 'batter', 'PITCH_ID', 'HIT_ID', 'game_pk', 'PLAY_ID', 'COUNT', 'BASES', 'BASES_AFTER', 'RS_ON_PLAY']]
-#
-#     return fact_tbl
-#
-
-
 def load_tables_many(df: pd.DataFrame, table_name):
     try:
         # Define connection parameters
@@ -665,7 +603,7 @@ def load_tables_many(df: pd.DataFrame, table_name):
 
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 9 * * *", default_args=default_args) as dag:
+with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 10 * * *", default_args=default_args) as dag:
 
     with TaskGroup("load_all_baseball_data") as load_statcast_data_group:
         connection = PythonOperator(
