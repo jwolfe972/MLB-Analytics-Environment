@@ -14,12 +14,14 @@ import psycopg2
 from airflow.operators.python_operator import PythonOperator
 import numpy as np
 import pendulum
+from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
+import pytz
 
  # VARIABLES
 ############################################################################################################################
 START_DATE = '2025-01-01'
 
-# END_DATE = '2024-01-01'
+#END_DATE = '2023-01-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
@@ -107,6 +109,8 @@ def test_postgres_connection():
     except psycopg2.Error as e:
         print("Error connecting to PostgreSQL:", e)
         raise  # raise error for error
+
+
 
 def run_sql_file(file_path: str):
     """Executes an SQL file in PostgreSQL using psycopg2."""
@@ -604,6 +608,42 @@ def load_tables_many(df: pd.DataFrame, table_name):
 
 # The Dag Process that Runs in Airflow
 with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 10 * * *", default_args=default_args) as dag:
+    slack_success = SlackWebhookOperator(
+        task_id='slack_success',
+        slack_webhook_conn_id='slack_conn',
+        message=":baseball: :baseball:  :baseball: :white_check_mark: DAG *{{ dag.dag_id }}* has completed successfully! :baseball: :baseball:  :baseball:  \n"
+                ":identification_card: *Run ID*:  {{ run_id }}\n"
+                ":hammer_and_wrench: *Run Type:* {{ dag_run.run_type }} \n"
+                ":calendar: *Run Start Time:* {{ dag_run.start_date }} \n"
+                f":calendar: *Run End Time:* {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S.%f%z')}\n"
+                ":page_facing_up: *Task States:* \n"
+                "{% for ti in dag_run.get_task_instances() %}"
+                    "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
+                "{% endfor %}"
+                 "\n",
+        channel="#airflow-dag-status",
+        username="Airflow-Dag-Updates",
+        dag=dag,
+    )
+
+    slack_failure = SlackWebhookOperator(
+        task_id='slack_failure',
+        slack_webhook_conn_id='slack_conn',
+        message=":baseball: :baseball: :baseball: :x: DAG *{{ dag.dag_id }}* has failed! Check the logs :baseball: :baseball: :baseball: \n"
+                " :identification_card: *Run ID*: {{ run_id }}\n"
+                ":hammer_and_wrench: *Run Type:* {{ dag_run.run_type }} \n"
+                ":calendar: *Run Start Time:* {{ dag_run.start_date }} \n"
+                f":calendar: *Run End Time:* {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S.%f%z')}\n"
+                ":page_facing_up: *Task States:* \n"
+                "{% for ti in dag_run.get_task_instances() %}"
+                    "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
+                "{% endfor %}"
+                 "\n",
+        channel="#airflow-dag-status",
+        username="Airflow-Dag-Updates",
+        trigger_rule="one_failed",  # Triggers only if any previous task fails
+        dag=dag,
+    )
 
     with TaskGroup("load_all_baseball_data") as load_statcast_data_group:
         connection = PythonOperator(
@@ -757,4 +797,4 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 10 * * *", d
 
         load_game_table >> load_hitter_table >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
-    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables
+    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> [slack_success, slack_failure]

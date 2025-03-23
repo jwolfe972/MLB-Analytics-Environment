@@ -297,6 +297,7 @@ services:
         airflow db init
         airflow connections add 'mlflow_default' --conn-type 'http' --conn-host 'http://mlflow' --conn-port '5000'
         airflow connections add 'pyspark-conn' --conn-type 'spark' --conn-host 'spark://spark-master' --conn-port '7077' --conn-extra '{"deploy_mode": "client", "spark_binary": "spark-submit"}'
+        
         exec /entrypoint airflow version
 
 

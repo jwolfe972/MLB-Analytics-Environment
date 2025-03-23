@@ -26,6 +26,8 @@ import random
 from statistics import mean
 import os
 from datetime import datetime, timedelta
+from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
+import pytz
 
 ## imports specifically for MLFlow Model Genration/Logging
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier, GradientBoostingClassifier
@@ -938,6 +940,42 @@ def make_game_predicitions(model):
     pass
 
 with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,1, tz="America/Chicago"), schedule_interval=None, default_args=default_args ) as dag:
+    slack_success = SlackWebhookOperator(
+        task_id='slack_success',
+        slack_webhook_conn_id='slack_conn',
+        message=":baseball: :baseball:  :baseball: :white_check_mark: DAG *{{ dag.dag_id }}* has completed successfully! :baseball: :baseball:  :baseball:  \n"
+                ":identification_card: *Run ID*:  {{ run_id }}\n"
+                ":hammer_and_wrench: *Run Type:* {{ dag_run.run_type }} \n"
+                ":calendar: *Run Start Time:* {{ dag_run.start_date }} \n"
+                f":calendar: *Run End Time:* {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S.%f%z')}\n"
+                ":page_facing_up: *Task States:* \n"
+                "{% for ti in dag_run.get_task_instances() %}"
+                "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
+                "{% endfor %}"
+                "\n",
+        channel="#airflow-dag-status",
+        username="Airflow-Dag-Updates",
+        dag=dag,
+    )
+
+    slack_failure = SlackWebhookOperator(
+        task_id='slack_failure',
+        slack_webhook_conn_id='slack_conn',
+        message=":baseball: :baseball: :baseball: :x: DAG *{{ dag.dag_id }}* has failed! Check the logs :baseball: :baseball: :baseball: \n"
+                " :identification_card: *Run ID*: {{ run_id }}\n"
+                ":hammer_and_wrench: *Run Type:* {{ dag_run.run_type }} \n"
+                ":calendar: *Run Start Time:* {{ dag_run.start_date }} \n"
+                f":calendar: *Run End Time:* {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S.%f%z')}\n"
+                ":page_facing_up: *Task States:* \n"
+                "{% for ti in dag_run.get_task_instances() %}"
+                "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
+                "{% endfor %}"
+                "\n",
+        channel="#airflow-dag-status",
+        username="Airflow-Dag-Updates",
+        trigger_rule="one_failed",  # Triggers only if any previous task fails
+        dag=dag,
+    )
     with TaskGroup("load_baseball_stat_data") as load_baseball_stat_data:
         connection =  PythonOperator(
             task_id='test_postgres_connection',
@@ -1056,4 +1094,4 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
     
 
 
-    load_baseball_stat_data >> load_fangraphs_model_data >> generate_game_prediciton_model
+    load_baseball_stat_data >> load_fangraphs_model_data >> generate_game_prediciton_model >> [slack_success, slack_failure]
