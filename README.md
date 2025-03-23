@@ -26,6 +26,7 @@
     - Atleast 8-12 GB of RAM
     - Internet Access for downloading data
     - A prefered Database Connection Application: I chose PgAdmin: https://www.pgadmin.org/download/
+    - A Slack account (for sending notifications on the status of DAG Runs)
 
 ### Guide on Getting Started
     Step 1: clone this repository
