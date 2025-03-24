@@ -60,6 +60,8 @@
 ### Note: For Freshly restarting the Containers and Volumes run this command:
 ```docker compose down --volumes --remove-orphans ```
 
+### Note: Sometimes the airflow-webserver.pid file can become stale and cause the airflow UI not to come up. To fix this just exec into the airflow-webserver container remove the .pid file and restart the container
+
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
 
