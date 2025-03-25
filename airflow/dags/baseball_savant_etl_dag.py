@@ -21,7 +21,7 @@ import pytz
 ############################################################################################################################
 START_DATE = '2025-01-01'
 
-#END_DATE = '2023-01-01'
+#END_DATE = '2024-01-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
@@ -78,8 +78,7 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': pendulum.datetime(2025, 3, 21, tz="America/Chicago"),
-    'catchup': False
+    'start_date': pendulum.datetime(2025, 3, 21, tz="America/Chicago")
 }
 
 
@@ -607,7 +606,7 @@ def load_tables_many(df: pd.DataFrame, table_name):
 
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 10 * * *", default_args=default_args) as dag:
+with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
         task_id='slack_success',
         slack_webhook_conn_id='slack_conn',
@@ -661,6 +660,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="0 10 * * *", d
         get_pybabseball_data = PythonOperator(
             task_id='load_statcast_data',
             python_callable=load_statcast_data,
+            retries=3,
             dag=dag
         )
         connection >>execute_sql_file_for_creation >>  get_pybabseball_data
