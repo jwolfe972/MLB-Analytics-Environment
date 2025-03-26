@@ -1017,6 +1017,7 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
             task_id='load-fangraphs-data',
             python_callable=scrape_f_graphs_team_data,
             dag=dag,
+            retries=3,
             op_args=[2024, load_baseball_model_data_task_again.output ]
         )
 

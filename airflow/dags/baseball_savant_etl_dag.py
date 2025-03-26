@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from airflow.models.dag import DAG
 from airflow.utils.task_group import TaskGroup
 from airflow.hooks.base import BaseHook
@@ -21,7 +21,7 @@ import pytz
 ############################################################################################################################
 START_DATE = '2025-01-01'
 
-#END_DATE = '2024-01-01'
+#END_DATE = '2019-01-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
@@ -204,7 +204,7 @@ def load_all_pitcher_pk():
             port="5432"
         )
         
-        sql = "SELECT DISTINCT pitcher_id FROM PITCHER_INFO_DIM;"
+        sql = "SELECT DISTINCT pitcher_id, pitcher_name FROM PITCHER_INFO_DIM;"
         pitcher_pks = pd.read_sql(sql, conn)
         
         print("Pitcher PKS Loaded")
@@ -476,6 +476,11 @@ def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFra
     
     print(pitch_info.columns)
     print(pitch_info.head(10))
+    print('This pitcher At bats')
+    print(full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454][['batter', 'pitcher', 'description']])
+    print(len(full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454]['des']))
+    print((full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454]['des']))
+    print(len(full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454]))
     return pitch_info
     
 
@@ -605,6 +610,33 @@ def load_tables_many(df: pd.DataFrame, table_name):
         raise  # raise error for further handling
 
 
+# noticed that for older years before the NL brought in DH pitchers had to hit so this function accounts for that
+def transform_pitchers_into_hitters(pitcher_df: pd.DataFrame, hitter_df: pd.DataFrame, transformed_pitcher: pd.DataFrame, transformed_hitter: pd.DataFrame):
+    #pitcher df -> load pk
+    # hitter_df -> load hitter
+    # transformed_pitcher -> transformed pitch
+    # transformed_hitter -> transformed hitter step
+    hitter_df['hitter_id'] = hitter_df['hitter_id'].astype(int)
+    transformed_hitter['hitter_id'] = transformed_hitter['hitter_id'].astype(int)
+    pitcher_df['pitcher_id'] = pitcher_df['pitcher_id'].astype(int)
+    transformed_pitcher['pitcher_id'] = transformed_pitcher['pitcher_id'].astype(int)
+    
+    pitcher_df = pd.concat([pitcher_df, transformed_pitcher]).drop_duplicates()
+    pitcher_df['pitcher_id'] = pitcher_df['pitcher_id'].astype(int)
+    
+    print(len(pitcher_df))
+    pitcher_df = pitcher_df[~pitcher_df['pitcher_id'].isin(hitter_df['hitter_id'])]
+    print(len(pitcher_df))
+    pitcher_df = pitcher_df[~pitcher_df['pitcher_id'].isin(transformed_hitter['hitter_id'])]
+    print(len(pitcher_df))
+    
+    return pitcher_df
+    
+    
+    
+    
+    
+
 # The Dag Process that Runs in Airflow
 with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
@@ -618,8 +650,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
                 ":page_facing_up: *Task States:* \n"
                 "{% for ti in dag_run.get_task_instances() %}"
                     "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
-                "{% endfor %}"
-                 "\n",
+                "{% endfor %}",
         channel="#airflow-dag-status",
         username="Airflow-Dag-Updates",
         dag=dag,
@@ -636,8 +667,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
                 ":page_facing_up: *Task States:* \n"
                 "{% for ti in dag_run.get_task_instances() %}"
                     "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
-                "{% endfor %}"
-                 "\n",
+                "{% endfor %}",
         channel="#airflow-dag-status",
         username="Airflow-Dag-Updates",
         trigger_rule="one_failed",  # Triggers only if any previous task fails
@@ -661,6 +691,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             task_id='load_statcast_data',
             python_callable=load_statcast_data,
             retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
         connection >>execute_sql_file_for_creation >>  get_pybabseball_data
@@ -728,6 +759,15 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             op_args=[get_pybabseball_data.output, pitcher_pks.output],
             dag=dag
         )
+        
+                
+        # transform_pitchers_for_hitters = PythonOperator(
+        #     task_id='transform_pitcher_to_hitters',
+        #     python_callable=transform_pitchers_into_hitters,
+        #     dag=dag,
+        #     op_args=[pitcher_pks.output, transform_hitter_data_step.output, transform_pitcher_data_step.output, transform_hitter_data_step.output]
+            
+        # )
 
         transform_pitch_data_step = PythonOperator(
             task_id='transform_pitch_data',
@@ -746,7 +786,8 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         transform_play_data_step = PythonOperator(
             task_id='transform_play_data',
             python_callable=transform_play_data,
-            op_args=[get_pybabseball_data.output, play_pks.output]
+            op_args=[get_pybabseball_data.output, play_pks.output],
+            dag=dag
         )
         # transform_fact_data_step = PythonOperator(
         #     task_id='transform_fact_data',
@@ -756,19 +797,29 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
 
 
 
-        transform_game_data_step >> transform_hitter_data_step >> transform_pitcher_data_step >>  transform_hit_data_step >> transform_play_data_step >> transform_pitch_data_step
+
+        transform_game_data_step >> transform_hitter_data_step >> transform_pitcher_data_step >>  transform_hit_data_step  >> transform_play_data_step >> transform_pitch_data_step
     
     with TaskGroup("Load-MLB-DW-Tables") as load_dw_tables:
         load_game_table = PythonOperator(
             task_id='load-game-table',
             python_callable=load_tables_many,
-            op_args=[transform_game_data_step.output, 'GAME_INFO_DIM']
+            op_args=[transform_game_data_step.output, 'GAME_INFO_DIM'],
+            dag=dag
         )
         load_hitter_table = PythonOperator(
             task_id='load-hitter-table',
             python_callable=load_tables_many,
-            op_args=[transform_hitter_data_step.output, 'HITTER_INFO_DIM']
+            op_args=[transform_hitter_data_step.output, 'HITTER_INFO_DIM'],
+            dag=dag
         )    
+        
+        # load_hitters_w_pitchers = PythonOperator(
+        #     task_id='load-hitter-table-for-pitchers',
+        #     python_callable=load_tables_many,
+        #     op_args=[transform_pitchers_for_hitters.output, 'HITTER_INFO_DIM'],
+        #     dag=dag
+        # )
         load_pitcher_table = PythonOperator(
             task_id='load-pitcher-table',
             python_callable=load_tables_many,

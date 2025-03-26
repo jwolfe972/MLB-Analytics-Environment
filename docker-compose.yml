@@ -97,32 +97,30 @@ services:
       - "5432:5432"
     networks:
       - my_network
-  
-  mongo:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-    ports:
-      - "27017:27017"
-    networks:
-      - my_network
-    volumes:
-      - mongo_data:/data/db
+  # mongo:
+  #   image: mongo:latest
+  #   container_name: mongodb
+  #   restart: always
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: root
+  #     MONGO_INITDB_ROOT_PASSWORD: example
+  #   ports:
+  #     - "27017:27017"
+  #   networks:
+  #     - my_network
+  #   volumes:
+  #     - mongo_data:/data/db
   
   grafana-mlb:
     image: grafana/grafana:latest
     container_name: grafana-mlb
     ports:
-      - "3000:3000"
+      - "4000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
-    restart: unless-stopped
     networks:
       - my_network
       
@@ -358,7 +356,6 @@ services:
       - my_network   
 volumes:
   pgdata:
-  mongo_data:
   grafana_data:
 
 networks:
