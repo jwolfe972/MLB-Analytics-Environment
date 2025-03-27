@@ -54,7 +54,7 @@
 <br>
 ```localhost:5000 -> ML Flow UI ```
 <br>
-```localhost:3000 -> Grafana (default login is user:admin pass: admin) ```
+```localhost:4000 -> Grafana (default login is user:admin pass: admin) ```
 
 
 ### Note: For Freshly restarting the Containers and Volumes run this command:
