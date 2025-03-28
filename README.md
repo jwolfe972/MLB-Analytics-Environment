@@ -69,7 +69,7 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ### Note: Sometimes the airflow-webserver.pid file can become stale and cause the airflow UI not to come up. To fix this just exec into the airflow-webserver container remove the .pid file and restart the container
 ### Note: For baseball savant ETL for loading past seasons data just modify the START_DATE and END_DATE variables at the top of the file
-
+### Also due to RAM limitiations only do one full season per load
 
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
