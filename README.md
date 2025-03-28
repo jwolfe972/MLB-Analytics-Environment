@@ -60,6 +60,13 @@
 ### Note: For Freshly restarting the Containers and Volumes run this command:
 ```docker compose down --volumes --remove-orphans ```
 
+Def recommend running this after I push new changes as I continue 
+until this project is in a stable state. Dont also forget to recreate the Slack Connection to Airflow upon freshly restarting the containers and volumes
+
+Also for the baseball savant ETL Dag that is scheduled so to start the job just unpause the DAG
+
+
+
 ### Note: Sometimes the airflow-webserver.pid file can become stale and cause the airflow UI not to come up. To fix this just exec into the airflow-webserver container remove the .pid file and restart the container
 
 ## UI Demo
@@ -70,3 +77,14 @@
 
 ## MLFlow UI
 # ![ MLFlow UI](/imgs/mlflow.png)
+
+
+# Project Phase Status and Progress
+## **Phase 1:** Description of the Existing System *(Due 02/25/2025)* ✅
+
+## **Phase 2:** Description of the Used Machine Learning and Design of User Interface *(Due 03/28/2025)* ✅
+
+## **Phase 3:** Extending the Architecture of an existing ML-based system *(Due 04/20/2025)* 🚧
+
+## **Phase 4:** Develop a User Interface *(Due 05/04/2025)* 🚧
+
