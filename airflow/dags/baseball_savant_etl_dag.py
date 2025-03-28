@@ -379,7 +379,7 @@ def transform_pitcher_data_for_hitter_table(df: pd.DataFrame, pitchers: pd.DataF
     pitcher_info.rename(columns={'pitcher': 'pitcher_id', 'player_name': 'pitcher_name'}, inplace=True)
     
     pitcher_info_for_hitter_table = pitcher_info[~pitcher_info['pitcher_id'].isin(hitters['hitter_id']) ]
-    pitcher_info_for_hitter_table = pitcher_info[~pitcher_info['pitcher_id'].isin(new_hitters['hitter_id']) ]
+    pitcher_info_for_hitter_table = pitcher_info_for_hitter_table[~pitcher_info_for_hitter_table['pitcher_id'].isin(new_hitters['hitter_id']) ]
     
     pitcher_info_for_hitter_table.rename(columns={'pitcher_id': 'hitter_id', 'pitcher_name': 'hitter_name'})
     
