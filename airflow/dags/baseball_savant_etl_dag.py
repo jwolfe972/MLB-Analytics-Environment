@@ -19,9 +19,9 @@ import pytz
 
  # VARIABLES
 ############################################################################################################################
-START_DATE = '2023-01-01'
+START_DATE = '2024-01-01'
 
-END_DATE = '2024-01-01'
+END_DATE = '2025-01-01'
 #END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
@@ -640,8 +640,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
                 ":page_facing_up: *Task States:* \n"
                 "{% for ti in dag_run.get_task_instances() %}"
                     "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
-                "{% endfor %}"
-                "<@U08JRHGGPSA>",
+                "{% endfor %}",
         channel="#airflow-dag-status",
         username="Airflow-Dag-Updates",
         dag=dag,
@@ -658,8 +657,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
                 ":page_facing_up: *Task States:* \n"
                 "{% for ti in dag_run.get_task_instances() %}"
                     "  - *Task:* {{ ti.task_id }} | *State:* {{ ti.state }} \n"
-                "{% endfor %}"
-                "<@U08JRHGGPSA>",
+                "{% endfor %}",
         channel="#airflow-dag-status",
         username="Airflow-Dag-Updates",
         trigger_rule="one_failed",  # Triggers only if any previous task fails
