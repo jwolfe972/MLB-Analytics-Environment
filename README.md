@@ -35,9 +35,12 @@
 
     Step 3: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
     
-    Step 4: Once Apache Airflow is up, first complete the steps specified in the Setting_Up_Slack_Connection_Airflow.pdf, then search for the ``load_mlb_game_prediction`` DAG and run the DAG to both create and populate the ML model database ** Also since this is web scraping sometimes it will error out, for that just clear the final state to re run from the error state so you won't lose progress in scraping
+    Step 4: Once Apache Airflow is up, first complete the steps specified in the Setting_Up_Slack_Connection_Airflow.pdf
 
-    *Extra* Step 5: Login to airflow and unpause the **baseball-savant-etl-workflow** DAG to populate the Datawarehouse for query the baseball savant pitch-by-pitch data (I say unpause because it is a scheduled job that'll start on itsown). I also created the ETL Process that will store that in a data warehouse as well. This can be used for creating whatever kind of visualizations you could want from this data and could possibly be used for generating a Hidden Markov model (see hmm.py for example) or for anything simulation based.
+    Step 5: If you are interested in the Pitch By Pitch Data unpause the 'baseball-savant-etl' dag. This should start the DAG since it is a scheduled DAG. This should run and populate the Data Warehouse tables for the DIM and FACT tables in the sql_scripts/schema.sql file.
+
+    Step 6: If you are interedted in the Game Prediction Model run the 'load_mlb_game_prediction'
+    DAG to populate the baseball_stats table and deploy an ML model for predicting wins (DAG still in process 🚧)
 
 ### Commands
 ``` docker-compose up -d ```
