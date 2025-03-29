@@ -37,7 +37,7 @@
     
     Step 4: Once Apache Airflow is up, first complete the steps specified in the Setting_Up_Slack_Connection_Airflow.pdf, then search for the ``load_mlb_game_prediction`` DAG and run the DAG to both create and populate the ML model database ** Also since this is web scraping sometimes it will error out, for that just clear the final state to re run from the error state so you won't lose progress in scraping
 
-    *Extra* Step 5: Login to airflow and run the **baseball-savant-etl-workflow** DAG to populate the Datawarehouse for query the baseball savant pitch-by-pitch data. I also created the ETL Process that will store that in a data warehouse as well. This can be used for creating whatever kind of visualizations you could want from this data and could possibly be used for generating a Hidden Markov model (see hmm.py for example) or for anything simulation based.
+    *Extra* Step 5: Login to airflow and unpause the **baseball-savant-etl-workflow** DAG to populate the Datawarehouse for query the baseball savant pitch-by-pitch data (I say unpause because it is a scheduled job that'll start on itsown). I also created the ETL Process that will store that in a data warehouse as well. This can be used for creating whatever kind of visualizations you could want from this data and could possibly be used for generating a Hidden Markov model (see hmm.py for example) or for anything simulation based.
 
 ### Commands
 ``` docker-compose up -d ```
@@ -68,6 +68,7 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 
 ### Note: Sometimes the airflow-webserver.pid file can become stale and cause the airflow UI not to come up. To fix this just exec into the airflow-webserver container remove the .pid file and restart the container
+
 ### Note: For baseball savant ETL for loading past seasons data just modify the START_DATE and END_DATE variables at the top of the file
 ### Also due to RAM limitiations only do one full season per load
 

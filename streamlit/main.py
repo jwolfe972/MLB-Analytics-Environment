@@ -49,7 +49,7 @@ all_teams = {'Chicago Cubs': 'CHC.png',
 
 
 
-@st.cache_data
+#@st.cache_data
 def load_schedule(date_filter):
     games = mlb_stats.schedule(start_date=date_filter, end_date=date_filter)
 
