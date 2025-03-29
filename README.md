@@ -27,11 +27,18 @@
     - Internet Access for downloading data
     - A prefered Database Connection Application: I chose PgAdmin: https://www.pgadmin.org/download/
     - A Slack account (for sending notifications on the status of DAG Runs)
+  
+### Windows Docker Setup Guide: [Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
 
-### Guide on Getting Started
+### Mac OS Docker Setup Guide: [Mac OS](https://docs.docker.com/desktop/setup/install/mac-install/)
+
+### Mac OS zsh Command Line Fix [zsh](https://stackoverflow.com/questions/64009138/docker-command-not-found-when-running-on-mac)
+<br>
+
+## Guide on Getting Started
     Step 1: clone this repository
 
-    Step 2: Make Sure the Docker Engine is running
+    Step 2: Make Sure the Docker Engine is running (Open Docker Desktop or confirm the engine is running)
 
     Step 3: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
     
