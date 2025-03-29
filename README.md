@@ -15,7 +15,7 @@
     - PostgreSQL (Storing Historical Data)
     - MLFlow (For ML Tracking, Storage and Deployment)
     - ** Extra Spark (For Big Data Processing) **
-    - ** Extra Grafana (For Dashboarding)
+    - ** Extra Grafana (For Dashboarding Savant Data)
     - Docker and Docker Compose (Stacking the application all together)
     
 
@@ -79,6 +79,9 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ## MLFlow UI
 # ![ MLFlow UI](/imgs/mlflow.png)
+
+## Grafana Dashboard Example
+# ![Grafana Dashboard](/imgs/grafana.png)
 
 
 # Project Phase Status and Progress
