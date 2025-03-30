@@ -7,7 +7,19 @@
 
 ## Description
 
-### This project expands upon the baseball prediction model presented above for my CSCE 5214 Software Development for AI class, through the creation of an UI for showing predictions for handling game outcome predictions
+### This project expands upon the baseball prediction model presented above for my CSCE 5214 Software Development for AI class, through the creation of an UI for showing predictions for handling game outcome predictions. Also upon further inspection this setup can also double as a built from scratch environment for doing baseball research and analysis
+<br> 
+
+## Why Should You Use This Program?
+    1. This program provides a Game Prediction Model Fully Automated (WIP 🚧)
+    2. This program provides a fully automated Baseball Savant Pitch-By-Pitch ETL Process into a Postgres Datawarehouse for easy querying
+    3. This program provides custom ML model creation and usage from the MLB Data
+    4. This program provides an underlying open-source dashboard tool to build custom visualizations from the data
+    5. This program also offers Apache Spark for Distributed Data Processing for Data projects that could be completed in environments such as Jupyter Notebook locally
+    6. Everything built in to this project can be ran locally for free and modified to be ran on Cloud Environments
+
+
+<br>
 
 ## Software Used
     - Python Streamlit (for the UI)
@@ -17,7 +29,8 @@
     - ** Extra Spark (For Big Data Processing) **
     - ** Extra Grafana (For Dashboarding Savant Data)
     - Docker and Docker Compose (Stacking the application all together)
-    
+
+
 
 ## How To Use This Application
 
@@ -46,7 +59,7 @@
 
     Step 5: If you are interested in the Pitch By Pitch Data unpause the 'baseball-savant-etl' dag. This should start the DAG since it is a scheduled DAG. This should run and populate the Data Warehouse tables for the DIM and FACT tables in the sql_scripts/schema.sql file.
 
-    Step 6: If you are interedted in the Game Prediction Model run the 'load_mlb_game_prediction'
+    Step 6: If you are interested in the Game Prediction Model run the 'load_mlb_game_prediction'
     DAG to populate the baseball_stats table and deploy an ML model for predicting wins (DAG still in progress 🚧)
 
 ### Commands
