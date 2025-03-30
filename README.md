@@ -17,9 +17,9 @@
 <a target="_blank" href="https://raw.githubusercontent.com/devicons/devicon/2ae2a900d2f041da66e950e4d48052658d850630/icons/pandas/pandas-original.svg" style="display: inline-block;"><img src="https://raw.githubusercontent.com/devicons/devicon/2ae2a900d2f041da66e950e4d48052658d850630/icons/pandas/pandas-original.svg" alt="pandas" width="42" height="42" /></a>
 <a target="_blank" href="https://seaborn.pydata.org/_images/logo-mark-lightbg.svg" style="display: inline-block;"><img src="https://seaborn.pydata.org/_images/logo-mark-lightbg.svg" alt="seaborn" width="42" height="42" /></a>
 <a target="_blank" href="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" style="display: inline-block;"><img src="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" alt="git" width="42" height="42" /></a>
-<a target="_blank" href="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" style="display: inline-block;"><img src="imgs/mlflow_logo.png" alt="mlflow" width="42" height="42" /></a>
-<a target="_blank" href="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" style="display: inline-block;"><img src="imgs/spark.png" alt="spark" width="42" height="42" /></a>
-<a target="_blank" href="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" style="display: inline-block;"><img src="imgs/airflow.png" alt="airflow" width="70" height="42" /></a>
+<a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/mlflow_logo.png" style="display: inline-block;"><img src="imgs/mlflow_logo.png" alt="mlflow" width="42" height="42" /></a>
+<a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/spark.png" style="display: inline-block;"><img src="imgs/spark.png" alt="spark" width="42" height="42" /></a>
+<a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/airflow.png" style="display: inline-block;"><img src="imgs/airflow.png" alt="airflow" width="70" height="42" /></a>
 
 </p>
 
