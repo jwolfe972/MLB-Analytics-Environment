@@ -19,9 +19,9 @@ import pytz
 
  # VARIABLES
 ############################################################################################################################
-START_DATE = '2025-01-01'
-#END_DATE = '2016-01-01'
-END_DATE = datetime.now().strftime('%Y-%m-%d')
+START_DATE = '2024-01-01'
+END_DATE = '2025-01-01'
+#END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
 
