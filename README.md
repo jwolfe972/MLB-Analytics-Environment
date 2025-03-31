@@ -114,7 +114,7 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ### Note: For baseball savant ETL for loading past seasons data just modify the START_DATE and END_DATE variables at the top of the file. The intial start and end dates are for pulling 2024 season data, you can adjust for this season by changing the start season to 2025 and uncommeting the END_DATE variable with the datetime.now()
 
-### Also due to RAM limitiations only do one full season per load
+### Also due to RAM limitiations only do one full season per load or sometime less than that depending on the RAM for your machine. Or adjust the Memory Allocation for your Docker Container setup
 
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
