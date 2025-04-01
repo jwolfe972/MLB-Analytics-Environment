@@ -16,12 +16,23 @@ import numpy as np
 import pendulum
 from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
 import pytz
-
+from pybaseball import batting_stats_bref
+from pybaseball import playerid_reverse_lookup
+from pybaseball import batting_stats
+from pybaseball import chadwick_register
  # VARIABLES
 ############################################################################################################################
 START_DATE = '2024-01-01'
-END_DATE = '2025-01-01'
+END_DATE = '2024-12-31'
 #END_DATE = datetime.now().strftime('%Y-%m-%d')
+
+start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
+
+end_date_dt = datetime.strptime(END_DATE, '%Y-%m-%d')
+
+END_YEAR = end_date_dt.year
+
+START_YEAR = start_date_dt.year
 
 TABLE_TABLE_COLUMN_INSERT_DICT = {
 
@@ -71,6 +82,15 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
     )'''
 },
 
+
+'BATTER_EXTRA_STATS': {
+    
+    'columns': '(HITTER_ID, GAME_YEAR, NUM_INTENT_WALKS, NUM_RBIS, NUM_RUNS, NUM_SB, WAR)',
+    'values': '(%s, %s, %s, %s, %s, %s, %s)',
+    'conflict': '(HITTER_ID, GAME_YEAR)',
+    'conflict_updates': ['NUM_INTENT_WALKS', 'NUM_RBIS', 'NUM_RUNS', 'NUM_SB', 'WAR']
+}
+
 }
 
 
@@ -109,6 +129,44 @@ def test_postgres_connection():
         raise  # raise error for error
 
 
+# This loads the IBB and other batting metrics for batters
+#NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
+def loading_other_batter_stats_non_null():
+    #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
+    data = batting_stats(start_season=START_YEAR,
+                         end_season=END_YEAR,
+                         ind=1)
+
+    player_mlbam_ids = chadwick_register()
+
+    data = data.merge(player_mlbam_ids, left_on='IDfg', right_on='key_fangraphs', how='left')
+
+    missing_ids = data[data['key_mlbam'].isnull()]
+
+    print(f'Players Missing from Chadwick Registry')
+    print(missing_ids['Name'])
+
+    # Filter out null MLB ID records and return those columns
+    return data[~data['key_mlbam'].isnull()][['key_mlbam', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
+
+
+def loading_other_batter_stats_name_null_batters():
+    #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
+    data = batting_stats(start_season=START_YEAR,
+                         end_season=END_YEAR,
+                         ind=1)
+
+    player_mlbam_ids = chadwick_register()
+
+    data = data.merge(player_mlbam_ids, left_on='IDfg', right_on='key_fangraphs', how='left')
+
+    missing_ids = data[data['key_mlbam'].isnull()]
+
+    print(f'Players Missing from Chadwick Registry')
+    print(missing_ids['Name'])
+    return missing_ids[['Name', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
+
+    
 
 def run_sql_file(file_path: str):
     """Executes an SQL file in PostgreSQL using psycopg2."""
@@ -181,7 +239,7 @@ def load_all_hitter_pk():
             port="5432"
         )
         
-        sql = "SELECT DISTINCT hitter_id FROM HITTER_INFO_DIM;"
+        sql = "SELECT DISTINCT hitter_id, hitter_name FROM HITTER_INFO_DIM;"
         hitter_pks = pd.read_sql(sql, conn)
         
         print("Hitter PKS Loaded")
@@ -322,10 +380,17 @@ def discard_batter_ids(value):
 
 def load_statcast_data():
     cache.enable()
-    data = statcast(START_DATE, END_DATE)
-    #data = statcast('2023-03-01', '2023-09-30')
-    print(data.head(10))
-    return data
+    
+    
+    if START_YEAR == END_YEAR:
+        data = statcast(START_DATE, END_DATE)
+        #data = statcast('2023-03-01', '2023-09-30')
+        print(data.head(10))
+        
+        return data
+    else:
+        print(f'Only Query 1 full Year worth of data at a time please...')
+        raise
 
 
 
@@ -626,6 +691,85 @@ def load_tables_many(df: pd.DataFrame, table_name):
         raise  # raise error for further handling
 
 
+def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
+    try:
+        # Define connection parameters
+        conn = psycopg2.connect(
+            dbname="MLB_DATA",
+            user="user",
+            password="password",
+            host="postgres",
+            port="5432"
+        )
+        
+        cursor = conn.cursor()
+
+        # Define the columns and values format from the dictionary
+        columns = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['columns']
+        values = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['values']
+        conflict = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['conflict']
+        conflict_updates = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['conflict_updates']
+        
+
+        #needed for pscyopg2 to insert null values
+        df = df.replace({np.NaN: None})
+
+        # Convert numpy.int64 to Python int for the dataframe values
+        def convert_types(row):
+            return tuple(int(value) if isinstance(value, np.int64) else value for value in row)
+        
+        # Convert the dataframe rows to a list of tuples with appropriate type handling
+        data = [convert_types(x) for x in df.itertuples(index=False, name=None)]
+
+        # SQL query with placeholders (%s)
+        sql = f'INSERT INTO {table_name} {columns} VALUES {values} ON CONFLICT {conflict} DO UPDATE SET '
+        
+        for column in conflict_updates:
+            sql += f' {column} = EXCLUDED.{column},\n'
+                
+
+        sql = sql.rstrip(',\n')
+        sql += ';'
+        print(sql)  # Debugging: print the query
+
+        # Execute batch insert
+        cursor.executemany(sql, data)
+
+        # Commit and close the connection
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        print('Success!!')
+    except psycopg2.Error as e:
+        print("Error w/ PostgreSQL:", e)
+        raise  # raise error for further handling
+
+
+def fix_null_batter_id_batter_stats(missing_df: pd.DataFrame, hitter_df: pd.DataFrame):
+     #missing_ids[['Name', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
+     
+     
+     # This is going to be section of One Spot off Fixes For Point errors in data which when they update Chadwick Registry could be removed
+     
+     missing_df.loc[missing_df['Name'] == 'Matthew Shaw', 'Name'] = 'Matt Shaw'
+     
+     
+     missing_df = missing_df.merge(hitter_df, left_on='Name', right_on='hitter_name', how='left')
+     
+     missing_ids = missing_df[missing_df['hitter_id'].isnull()]
+     
+     
+     print(f'These records need a fix for their batter_stats')
+     print(missing_ids[['Name', 'Season']])
+     
+     
+     non_missing_ids = missing_df[~missing_df['hitter_id'].isnull()]
+     
+     
+     return non_missing_ids[['hitter_id', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
+    
+
 # The Dag Process that Runs in Airflow
 with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
@@ -669,6 +813,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             python_callable=test_postgres_connection,
             dag=dag
         )
+        
 
         execute_sql_file_for_creation = PythonOperator(
             task_id='create-sql-tables',
@@ -683,7 +828,19 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             retry_delay=timedelta(seconds=30),
             dag=dag
         )
-        connection >>execute_sql_file_for_creation >>  get_pybabseball_data
+        
+        load_batting_stats_task = PythonOperator(
+            task_id='load_batting_stats_non_null',
+            python_callable=loading_other_batter_stats_non_null,
+            dag=dag
+        )
+        
+        load_missing_mlb_id_batting_stats_task = PythonOperator(
+            task_id='load_batting_stats_null',
+            python_callable=loading_other_batter_stats_name_null_batters,
+            dag=dag
+        )
+        connection >> execute_sql_file_for_creation >>  get_pybabseball_data >> load_batting_stats_task >> load_missing_mlb_id_batting_stats_task
 
     with TaskGroup("Load-DB-Current-DW-Info") as get_current_dw_info:
         game_pks = PythonOperator(
@@ -797,24 +954,56 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         load_pitcher_table = PythonOperator(
             task_id='load-pitcher-table',
             python_callable=load_tables_many,
-            op_args=[transform_pitcher_data_step.output, 'PITCHER_INFO_DIM']
+            op_args=[transform_pitcher_data_step.output, 'PITCHER_INFO_DIM'],
+            dag=dag
         )
         load_pitch_table = PythonOperator(
             task_id='load-pitch-table',
             python_callable=load_tables_many,
-            op_args=[transform_pitch_data_step.output, 'PITCH_INFO_FACT']
+            op_args=[transform_pitch_data_step.output, 'PITCH_INFO_FACT'],
+            dag=dag
         )
         load_hit_table = PythonOperator(
             task_id='load-hit-table',
             python_callable=load_tables_many,
-            op_args=[transform_hit_data_step.output, 'HIT_INFO_DIM']
+            op_args=[transform_hit_data_step.output, 'HIT_INFO_DIM'],
+            dag=dag
         )
         load_play_table = PythonOperator(
             task_id='load-play-table',
             python_callable=load_tables_many,
-            op_args=[transform_play_data_step.output, 'PLAY_INFO_DIM']
+            op_args=[transform_play_data_step.output, 'PLAY_INFO_DIM'],
+            dag=dag
         )
-
+        
         load_game_table >> load_hitter_table >>  load_hitter_table_w_pitchers >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
-    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> [slack_success, slack_failure]
+    with TaskGroup("Load-Batter-Stats-table") as load_batter_stats:
+        load_non_null_info_task = PythonOperator(
+            task_id='load-batter-stats',
+            python_callable=load_tables_many_on_conflict,
+            op_args=[load_batting_stats_task.output,  'BATTER_EXTRA_STATS'],
+            dag=dag
+        )
+        
+        hitters_pks_for_null = PythonOperator(
+            task_id='load_all_hitter_pk_for_null_fix',
+            python_callable=load_all_hitter_pk,
+            dag=dag
+        )
+        
+        load_null_info_task = PythonOperator(
+            task_id='load-null-batter-stats',
+            python_callable=fix_null_batter_id_batter_stats,
+            op_args=[load_missing_mlb_id_batting_stats_task.output, hitters_pks_for_null.output ]
+        )
+        
+        load_null_to_table = PythonOperator(
+            task_id='load-null-batter-stats-into-table',
+            python_callable=load_tables_many_on_conflict,
+            op_args=[load_null_info_task.output, 'BATTER_EXTRA_STATS']
+        )
+        
+        load_non_null_info_task >> hitters_pks_for_null >> load_null_info_task >> load_null_to_table
+
+    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_batter_stats >> [slack_success, slack_failure]
