@@ -9,8 +9,15 @@ LEFT JOIN PITCHER_INFO_DIM player on player.PITCHER_ID = fact.PITCHER_ID
 WHERE player.PITCHER_NAME LIKE '%Eovaldi%'
 
 
--- get batting avgs  and obp with most recent team (NOTE: For OBP and OPS calculation it is an estimate since the pitch data doesnt have intentional walks)
-WITH batting_stats AS (
+WITH other_baseball_stats as (
+
+SELECT * FROM
+BATTER_EXTRA_STATS
+WHERE GAME_YEAR = $SEASON
+
+
+),
+batting_stats AS (
     SELECT 
         batter.HITTER_ID, 
         SUM(CASE WHEN play.events IN ('home_run', 'triple', 'double', 'single') THEN 1 ELSE 0 END) AS hit_count,
@@ -27,7 +34,7 @@ WITH batting_stats AS (
     LEFT JOIN PITCH_INFO_FACT fact ON fact.PLAY_ID = play.PLAY_ID
     LEFT JOIN HITTER_INFO_DIM batter ON batter.HITTER_ID = fact.BATTER_ID
     LEFT JOIN GAME_INFO_DIM game ON game.GAME_PK = fact.GAME_ID
-    WHERE game.game_type = 'R' AND game.game_year = 2024
+    WHERE game.game_type = 'R' AND game.game_year = $SEASON
     GROUP BY batter.HITTER_ID
 ),
 latest_team AS (
@@ -37,7 +44,7 @@ latest_team AS (
         ROW_NUMBER() OVER (PARTITION BY fact.BATTER_ID ORDER BY game.game_date DESC) AS rn
     FROM PITCH_INFO_FACT fact
     LEFT JOIN GAME_INFO_DIM game ON game.GAME_PK = fact.GAME_ID
-    WHERE game.game_year = 2024
+    WHERE game.game_year = $SEASON
 ),
 stats_table AS (
     SELECT 
@@ -47,24 +54,28 @@ stats_table AS (
         stats.walks,
         latest.most_recent_team,
 		stats.num_pa,
+		other.NUM_INTENT_WALKS,
+		other.NUM_RBIS,
+		other.WAR,
 		CASE
-			WHEN stats.total_ab > 0 THEN ROUND( CAST( (1*stats.num_singles + 2*stats.num_doubles + 3*stats.num_triples + 4*num_hrs) AS DECIMAL ) / CAST(stats.total_ab AS DECIMAL)   , 3)
+			WHEN stats.total_ab > 0 THEN ROUND( CAST( (1*stats.num_singles + 2*stats.num_doubles + 3*stats.num_triples + 4*num_hrs) AS DECIMAL ) / CAST(stats.total_ab AS DECIMAL)   , 4)
 			ELSE NULL
 		END AS SLG,
         CASE 
-            WHEN stats.total_ab > 0 THEN ROUND((CAST(stats.hit_count AS DECIMAL) / CAST(stats.total_ab AS DECIMAL)), 3)
+            WHEN stats.total_ab > 0 THEN ROUND((CAST(stats.hit_count AS DECIMAL) / CAST(stats.total_ab AS DECIMAL)), 4)
             ELSE NULL  
         END AS BA,
         CASE 
-            WHEN (stats.total_ab + stats.walks + stats.SF) > 0 THEN ROUND((CAST(num_OBP AS DECIMAL) / (stats.total_ab + stats.walks + stats.SF)), 3)
+            WHEN (stats.total_ab + stats.walks + stats.SF + other.NUM_INTENT_WALKS) > 0 THEN ROUND(( (CAST(num_OBP AS DECIMAL) + other.NUM_INTENT_WALKS ) / (stats.total_ab + stats.walks + stats.SF + other.NUM_INTENT_WALKS)), 4)
             ELSE NULL 
         END AS OBP
     FROM batting_stats stats
     LEFT JOIN HITTER_INFO_DIM batter ON batter.HITTER_ID = stats.HITTER_ID
     LEFT JOIN latest_team latest ON latest.BATTER_ID = stats.HITTER_ID AND latest.rn = 1
-  WHERE stats.num_pa > 162 * 3.1
+	LEFT JOIN other_baseball_stats other ON other.HITTER_ID = batter.HITTER_ID
+ WHERE stats.num_pa > $Num_Games  * 3.1 AND other.GAME_YEAR = $SEASON
 )
-SELECT hitter_name, most_recent_team, ba, obp, hit_count, num_pa, walks, slg, (obp+slg) AS ops
+SELECT hitter_name AS "Player", most_recent_team as "Tm", num_pa as "PA", ba as "BA", obp as "OBP", slg as "SLG", ROUND(obp+slg, 4) AS "OPS", hit_count as "H", walks as "BB", NUM_INTENT_WALKS AS "IBB", NUM_RBIS AS "RBIs", WAR as "WAR"
 FROM stats_table
 WHERE obp IS NOT NULL AND ba is not null AND slg IS NOT NULL
-ORDER BY  ops DESC;
+ORDER BY  "OPS" DESC;
