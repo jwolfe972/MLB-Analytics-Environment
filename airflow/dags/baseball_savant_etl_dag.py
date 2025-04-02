@@ -24,9 +24,9 @@ from unidecode import unidecode
 #TODO: Implement Checker for Pitcher's that are null for loading their stats
  # VARIABLES
 ############################################################################################################################
-START_DATE = '2024-01-01'
-END_DATE = '2024-12-31'
-#END_DATE = datetime.now().strftime('%Y-%m-%d')
+START_DATE = '2025-01-01'
+#END_DATE = '2016-12-31'
+END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
 
@@ -173,8 +173,7 @@ def loading_other_batter_stats_non_null():
 #NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
 def loading_other_pitching_stats_non_null():
     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = pitching_stats(start_season=START_YEAR,
-                         end_season=END_YEAR,
+    data = pitching_stats(START_YEAR,
                          ind=1,
                          qual=1)
 
@@ -441,7 +440,7 @@ def discard_batter_ids(value):
 
 
 def load_statcast_data():
-    cache.enable()
+    #cache.enable()
     
     
     if START_YEAR == END_YEAR:
@@ -873,7 +872,7 @@ def fix_null_pitcher_id_pitcher_stats(missing_df: pd.DataFrame, pitcher_df: pd.D
     
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
+with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 10 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
         task_id='slack_success',
         slack_webhook_conn_id='slack_conn',
