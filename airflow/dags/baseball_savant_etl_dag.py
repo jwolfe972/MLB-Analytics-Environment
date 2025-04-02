@@ -872,7 +872,7 @@ def fix_null_pitcher_id_pitcher_stats(missing_df: pd.DataFrame, pitcher_df: pd.D
     
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 10 * * *", default_args=default_args, catchup=False) as dag:
+with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
         task_id='slack_success',
         slack_webhook_conn_id='slack_conn',
