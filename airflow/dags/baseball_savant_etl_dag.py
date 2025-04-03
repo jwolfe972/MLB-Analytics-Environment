@@ -22,6 +22,8 @@ from pybaseball import batting_stats, pitching_stats
 from pybaseball import chadwick_register
 from unidecode import unidecode
 #TODO: Implement Checker for Pitcher's that are null for loading their stats
+
+cache.disable()
  # VARIABLES
 ############################################################################################################################
 START_DATE = '2025-01-01'
@@ -153,9 +155,9 @@ def transform_name(name):
 #NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
 def loading_other_batter_stats_non_null():
     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = batting_stats(start_season=START_YEAR,
-                         end_season=END_YEAR,
-                         ind=1)
+    data = batting_stats(START_YEAR,
+                         ind=1,
+                         qual=1)
 
     player_mlbam_ids = chadwick_register()
 
@@ -193,7 +195,6 @@ def loading_other_pitching_stats_non_null():
 def loading_other_batter_stats_name_null_batters():
     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
     data = batting_stats(start_season=START_YEAR,
-                         end_season=END_YEAR,
                          ind=1,
                          qual=1)
 
@@ -209,8 +210,7 @@ def loading_other_batter_stats_name_null_batters():
 
 def loading_other_pitching_stats_null_pitchers():
     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = pitching_stats(start_season=START_YEAR,
-                         end_season=END_YEAR,
+    data = pitching_stats(START_YEAR,
                          ind=1,
                          qual=1)
     player_mlbam_ids = chadwick_register()
@@ -441,8 +441,6 @@ def discard_batter_ids(value):
 
 def load_statcast_data():
     #cache.enable()
-    
-    
     if START_YEAR == END_YEAR:
         data = statcast(START_DATE, END_DATE)
         #data = statcast('2023-03-01', '2023-09-30')
