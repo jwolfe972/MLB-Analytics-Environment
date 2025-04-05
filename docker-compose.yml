@@ -97,20 +97,19 @@ services:
       - "5432:5432"
     networks:
       - my_network
-  # mongo:
-  #   image: mongo:latest
-  #   container_name: mongodb
-  #   restart: always
-  #   environment:
-  #     MONGO_INITDB_ROOT_USERNAME: root
-  #     MONGO_INITDB_ROOT_PASSWORD: example
-  #   ports:
-  #     - "27017:27017"
-  #   networks:
-  #     - my_network
-  #   volumes:
-  #     - mongo_data:/data/db
   
+  jupyter-notebook:
+    build:
+      context: ./jupyter
+      dockerfile: Dockerfile
+    container_name: jupyter-notebook
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./jupyter/notebooks:/app
+    networks:
+      - my_network
+    
   grafana-mlb:
     image: grafana/grafana:latest
     container_name: grafana-mlb

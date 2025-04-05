@@ -1,0 +1,9 @@
+scikit-learn
+pandas
+matplotlib
+seaborn
+psycopg2
+numpy
+statsmodels
+mlflow
+pyspark
