@@ -48,6 +48,7 @@
     - MLFlow (For ML Tracking, Storage and Deployment)
     - ** Extra Spark (For Big Data Processing) **
     - ** Extra Grafana (For Dashboarding Savant Data)
+    - ** Extra Jupyter Notebook Server (For creating notebooks for analysis)
     - Docker and Docker Compose (Stacking the application all together)
 
 
@@ -56,7 +57,7 @@
 
 ### Requirements
     - Docker CLI or Docker Desktop (I use Docker Desktop)
-    - Atleast 8-12 GB of RAM
+    - Atleast 12-16 GB of RAM
     - Internet Access for downloading data
     - A prefered Database Connection Application: I chose PgAdmin: https://www.pgadmin.org/download/
     - A Slack account (for sending notifications on the status of DAG Runs)
@@ -98,6 +99,8 @@
 ```localhost:5000 -> ML Flow UI ```
 <br>
 ```localhost:4000 -> Grafana (default login is user:admin pass: admin) ```
+<br>
+```localhost:8888 -> Jupyter Notebook Server ```
 
 
 ### Note: For Freshly restarting the Containers and Volumes run this command:
@@ -127,6 +130,9 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ## Grafana Dashboard Example
 # ![Grafana Dashboard](/imgs/grafana.png)
+
+## Jupyter Notebook Server
+# ![Jupyter Notebook](/imgs/jupyter-notebook.png)
 
 
 # Project Phase Status and Progress
