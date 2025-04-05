@@ -51,6 +51,7 @@ services:
       context: ./streamlit
       dockerfile: Dockerfile
     container_name: streamlit-app
+    restart: always
     ports:
       - "8051:8051"
     depends_on:
@@ -72,6 +73,7 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://0.0.0.0:5000
     container_name: mlflow
+    restart: always
     networks:
       - my_network
     volumes:
@@ -103,6 +105,7 @@ services:
       context: ./jupyter
       dockerfile: Dockerfile
     container_name: jupyter-notebook
+    restart: always
     ports:
       - "8888:8888"
     volumes:
@@ -113,6 +116,7 @@ services:
   grafana-mlb:
     image: grafana/grafana:latest
     container_name: grafana-mlb
+    restart: always
     ports:
       - "4000:3000"
     environment:
@@ -124,8 +128,11 @@ services:
       - my_network
       
   spark-master:
-    image: bitnami/spark:latest
-    container_name: spark-master
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    container_name: spark
+    restart: always
     environment:
       - SPARK_MODE=master
     ports:
@@ -135,15 +142,19 @@ services:
       - my_network
 
   spark-worker:
-    image: bitnami/spark:latest
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
     container_name: spark-worker
+
     environment:
       - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_URL=spark://spark:7077
     depends_on:
       - spark-master
     networks:
       - my_network
+    restart: always
 
   
 
@@ -160,12 +171,14 @@ services:
       retries: 50
       start_period: 30s
     restart: always
+    container_name: redis
     networks:
       - my_network   
 
   airflow-webserver:
     <<: *airflow-common
     command: webserver -p 8081
+    container_name: airflow-webserver
     ports:
       - "8081:8081"
     healthcheck:
@@ -185,6 +198,7 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    container_name: airflow-scheduler
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
       interval: 30s
@@ -202,6 +216,7 @@ services:
   airflow-worker:
     <<: *airflow-common
     command: celery worker
+    container_name: airflow-worker
     healthcheck:
       # yamllint disable rule:line-length
       test:
@@ -227,6 +242,7 @@ services:
   airflow-triggerer:
     <<: *airflow-common
     command: triggerer
+    container_name: airflow-triggerer
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
       interval: 30s
