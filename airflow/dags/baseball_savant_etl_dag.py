@@ -21,7 +21,9 @@ from pybaseball import playerid_reverse_lookup
 from pybaseball import batting_stats, pitching_stats
 from pybaseball import chadwick_register
 from unidecode import unidecode
-#TODO: Implement Checker for Pitcher's that are null for loading their stats
+import requests
+from bs4 import BeautifulSoup
+#TODO: Write up documentation for this ETL Process
 
 cache.disable()
  # VARIABLES
@@ -102,6 +104,14 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
     'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
     'conflict': '(PITCHER_ID, GAME_YEAR)',
     'conflict_updates': ['WINS', 'LOSSES', 'ERA', 'IP', 'SO', 'BB', 'K_9', 'WHIP', 'BABIP', 'STUFF_PLUS', 'FIP', 'SV', 'WAR' ]
+},
+
+'WOBA_CONSTANTS': {
+
+    'columns': '(Season, wOBA, wOBAScale, wBB, wHBP, w1B, w2B, w3B, wHR, runSB, runCS, R_PA, R_W, cFIP)',
+    'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+    'conflict': '(Season)',
+    'conflict_updates': ['wOBA', 'wOBAScale', 'wBB', 'wHBP', 'w1B', 'w2B', 'w3B', 'wHR', 'runSB', 'runCS', 'R_PA', 'R_W', 'cFIP']
 }
 
 }
@@ -118,6 +128,40 @@ default_args = {
 
 
 #############################################################################################################################
+
+def load_fangraphs_woba_constants():
+    # Step 1: Fetch the page content
+    url = 'https://www.fangraphs.com/guts.aspx?type=cn'
+    response = requests.get(url)
+
+    # Step 2: Parse the page content with BeautifulSoup
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Step 3: Find the table
+    table = soup.find('table', {'class': 'rgMasterTable'})
+
+    # Step 4: Extract column headers
+    headers = [header.get_text() for header in table.find_all('th')]
+
+    # Step 5: Extract rows of data
+    rows = []
+    for row in table.find_all('tr')[1:]:  # Skip the header row
+        cells = row.find_all('td')
+        row_data = [cell.get_text() for cell in cells]
+        rows.append(row_data)
+
+    # Step 6: Create a DataFrame
+    df = pd.DataFrame(rows, columns=headers)
+    df['Season'] = df['Season'].astype(int)
+
+    df = df[df['Season'] >= 2015]
+
+
+    print(df)
+
+    return df
+
+
 def test_postgres_connection():
     try:
         # Define connection parameters
@@ -920,6 +964,12 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             op_args=[f'{os.getcwd()}/sql_files/schema.sql'],
             dag=dag
         )
+
+        extract_woba_constants_task = PythonOperator(
+            task_id='extract_woba_constants-task',
+            python_callable=load_fangraphs_woba_constants,
+            dag=dag
+        )
         get_pybabseball_data = PythonOperator(
             task_id='load_statcast_data',
             python_callable=load_statcast_data,
@@ -951,7 +1001,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             python_callable=loading_other_pitching_stats_null_pitchers,
             dag=dag
         )
-        connection >> execute_sql_file_for_creation >>  get_pybabseball_data >> load_batting_stats_task >> load_missing_mlb_id_batting_stats_task >> load_pitching_stats_task >> load_pitching_stats_missing_task
+        connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task >> load_missing_mlb_id_batting_stats_task >> load_pitching_stats_task >> load_pitching_stats_missing_task
 
     with TaskGroup("Load-DB-Current-DW-Info") as get_current_dw_info:
         game_pks = PythonOperator(
@@ -1090,6 +1140,11 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         load_game_table >> load_hitter_table >>  load_hitter_table_w_pitchers >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
     with TaskGroup("Load-Batter-Stats-table") as load_batter_stats:
+        load_woba_constants_table_task = PythonOperator(
+            task_id='load-woba-constants-table',
+            python_callable=load_tables_many_on_conflict,
+            op_args=[extract_woba_constants_task.output, 'WOBA_CONSTANTS' ]
+        )
         load_non_null_info_task = PythonOperator(
             task_id='load-batter-stats',
             python_callable=load_tables_many_on_conflict,
@@ -1149,6 +1204,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         
         
         
-        load_non_null_info_task >> load_non_null_pitchers_task >> hitters_pks_for_null >> pitcher_pk_for_null >> load_null_info_task >>  load_null_pitcher_info_task >> load_null_to_table >> load_null_to_table_pitchers
+        load_woba_constants_table_task >>load_non_null_info_task >> load_non_null_pitchers_task >> hitters_pks_for_null >> pitcher_pk_for_null >> load_null_info_task >>  load_null_pitcher_info_task >> load_null_to_table >> load_null_to_table_pitchers
 
     load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_batter_stats >> [slack_success, slack_failure]
