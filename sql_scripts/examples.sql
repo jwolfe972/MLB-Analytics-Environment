@@ -79,3 +79,26 @@ SELECT hitter_name AS "Player", most_recent_team as "Tm", num_pa as "PA", ba as 
 FROM stats_table
 WHERE obp IS NOT NULL AND ba is not null AND slg IS NOT NULL
 ORDER BY  "OPS" DESC;
+
+
+
+with cycle_watch as (
+
+SELECT pitch.BATTER_ID,
+pitch.GAME_ID,
+SUM(CASE WHEN play.events IN ('single') THEN 1 ELSE 0 END) as num_singles,
+SUM(CASE WHEN play.events IN ('double') THEN 1 ELSE 0 END) as num_doubles,
+SUM(CASE WHEN play.events IN ('triple') THEN 1 ELSE 0 END) as num_triples,
+SUM(CASE WHEN play.events IN ('home_run') THEN 1 ELSE 0 END) as num_HRs
+FROM PITCH_INFO_FACT pitch
+LEFT JOIN HITTER_INFO_DIM hit on hit.HITTER_ID = pitch.BATTER_ID
+LEFT JOIN GAME_INFO_DIM game on game.GAME_PK = pitch.GAME_ID
+LEFT JOIN PLAY_INFO_DIM play on play.PLAY_ID = pitch.PLAY_ID
+GROUP BY pitch.BATTER_ID, pitch.GAME_ID
+)
+SELECT cycle.BATTER_ID, hit.HITTER_NAME, game.GAME_DATE, game.game_year
+FROM cycle_watch cycle
+LEFT JOIN HITTER_INFO_DIM hit on hit.HITTER_ID = cycle.BATTER_ID
+LEFT JOIN GAME_INFO_DIM game on game.GAME_PK = cycle.GAME_ID
+WHERE num_singles > 0 AND num_doubles > 0 AND num_triples > 0 AND num_HRs > 0
+ORDER BY game.game_year DESC

@@ -1,19 +1,19 @@
-FROM apache/airflow:latest
+FROM apache/airflow:2.10.5
 
 
 #https://robust-dinosaur-2ef.notion.site/How-to-run-PySpark-with-Apache-Airflow-PUBLIC-1449e45d4dbe8077828be971b0078495
 # Switch to root to install system dependencies
-USER root
-
-# Install OpenJDK-17
-RUN apt update && \
-    apt-get install -y openjdk-17-jdk && \
-    apt-get install -y ant && \
-    apt-get clean;
-
-# Set JAVA_HOME
-ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
-RUN export JAVA_HOME
+#USER root
+#
+## Install OpenJDK-17
+#RUN apt update && \
+#    apt-get install -y openjdk-17-jdk && \
+#    apt-get install -y ant && \
+#    apt-get clean;
+#
+## Set JAVA_HOME
+#ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
+#RUN export JAVA_HOME
 
 # Switch back to airflow user
 USER airflow

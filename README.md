@@ -18,7 +18,6 @@
 <a target="_blank" href="https://seaborn.pydata.org/_images/logo-mark-lightbg.svg" style="display: inline-block;"><img src="https://seaborn.pydata.org/_images/logo-mark-lightbg.svg" alt="seaborn" width="42" height="42" /></a>
 <a target="_blank" href="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" style="display: inline-block;"><img src="https://www.vectorlogo.zone/logos/git-scm/git-scm-icon.svg" alt="git" width="42" height="42" /></a>
 <a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/mlflow_logo.png" style="display: inline-block;"><img src="imgs/mlflow_logo.png" alt="mlflow" width="42" height="42" /></a>
-<a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/spark.png" style="display: inline-block;"><img src="imgs/spark.png" alt="spark" width="42" height="42" /></a>
 <a target="_blank" href="https://github.com/jwolfe972/mlb_prediction_app/blob/main/imgs/airflow.png" style="display: inline-block;"><img src="imgs/airflow.png" alt="airflow" width="70" height="42" /></a>
 
 </p>
@@ -35,8 +34,7 @@
     2. This program provides a fully automated Baseball Savant Pitch-By-Pitch ETL Process into a Postgres Datawarehouse for easy querying
     3. This program provides custom ML model creation and usage from the MLB Data
     4. This program provides an underlying open-source dashboard tool to build custom visualizations from the data
-    5. This program also offers Apache Spark for Distributed Data Processing for Data projects that could be completed in environments such as Jupyter Notebook locally
-    6. Everything built in to this project can be ran locally for free and modified to be ran on Cloud Environments
+    5. Everything built in to this project can be ran locally for free and modified to be ran on Cloud Environments
 
 
 <br>
@@ -46,7 +44,6 @@
     - Apache Airflow (Automated Data Pipeline for updating data)
     - PostgreSQL (Storing Historical Data)
     - MLFlow (For ML Tracking, Storage and Deployment)
-    - ** Extra Spark (For Big Data Processing) **
     - ** Extra Grafana (For Dashboarding Savant Data)
     - ** Extra Jupyter Notebook Server (For creating notebooks for analysis)
     - Docker and Docker Compose (Stacking the application all together)

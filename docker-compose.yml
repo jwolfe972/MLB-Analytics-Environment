@@ -81,7 +81,8 @@ services:
       - ./mlflow/mlruns:/mlruns
 
   postgres:
-    image: postgres:latest
+    image: postgres:17
+    shm_size: 1gb
     container_name: postgres
     environment:
       POSTGRES_USER: user
@@ -114,7 +115,7 @@ services:
       - my_network
     
   grafana-mlb:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6.0
     container_name: grafana-mlb
     restart: always
     ports:
@@ -126,37 +127,7 @@ services:
       - grafana_data:/var/lib/grafana
     networks:
       - my_network
-      
-  spark-master:
-    build:
-      context: ./spark
-      dockerfile: Dockerfile
-    container_name: spark
-    restart: always
-    environment:
-      - SPARK_MODE=master
-    ports:
-      - "8080:8080"  # Spark Web UI
-      - "7077:7077"  # Spark Master Port
-    networks:
-      - my_network
 
-  spark-worker:
-    build:
-      context: ./spark
-      dockerfile: Dockerfile
-    container_name: spark-worker
-
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark:7077
-    depends_on:
-      - spark-master
-    networks:
-      - my_network
-    restart: always
-
-  
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
