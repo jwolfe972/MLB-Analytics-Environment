@@ -7,3 +7,4 @@ numpy
 statsmodels
 mlflow
 pyspark
+pybaseball
