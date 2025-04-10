@@ -116,6 +116,10 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ### Also due to RAM limitiations only do one full season per load or sometime less than that depending on the RAM for your machine. Or adjust the Memory Allocation for your Docker Container setup
 
+## Diagram of the Services
+# ![Diagram](/imgs/diagram.png)
+
+
 ## UI Demo
 # ![Streamlit Dashboard](/imgs/UI.png)
 
@@ -130,6 +134,7 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ## Jupyter Notebook Server
 # ![Jupyter Notebook](/imgs/jupyter-notebook.png)
+
 
 
 # Project Phase Status and Progress

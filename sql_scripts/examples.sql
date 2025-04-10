@@ -92,7 +92,7 @@ stats_table AS (
     LEFT JOIN latest_team latest ON latest.BATTER_ID = stats.HITTER_ID AND latest.rn = 1
 	LEFT JOIN other_baseball_stats other ON other.HITTER_ID = batter.HITTER_ID
 	LEFT JOIN woba_constants woba on woba.Season = other.GAME_YEAR
- WHERE stats.num_pa > 8  * 3.1 AND other.GAME_YEAR = 2025
+ WHERE stats.num_pa > 9  * 3.1 AND other.GAME_YEAR = 2025
 )
 SELECT hitter_name AS "Player", most_recent_team as "Tm", (num_pa + NUM_INTENT_WALKS) as "PA", ba as "BA", obp as "OBP", slg as "SLG", ROUND(obp+slg, 4) AS "OPS", woba as "wOBA", hit_count as "H", num_HRs as "HRs", walks as "BB", NUM_INTENT_WALKS AS "IBB", NUM_RBIS AS "RBIs", WAR as "WAR"
 FROM stats_table
