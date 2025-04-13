@@ -88,14 +88,13 @@
 ```localhost:8051 -> Streamlit app```
 <br>
 ```localhost:8081 -> Apache Airflow Web UI (default login is user:airflow pass:airflow)```
-<br>
-```localhost:8080 -> SparkUI```
+
 <br>
 ```localhost:5432 -> PostgreSQL Database (default login is user:user pass: password)```
 <br>
 ```localhost:5000 -> ML Flow UI ```
 <br>
-```localhost:4000 -> Grafana (default login is user:admin pass: admin) ```
+```localhost:4000 -> Metabase ```
 <br>
 ```localhost:8888 -> Jupyter Notebook Server ```
 
@@ -129,8 +128,8 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 ## MLFlow UI
 # ![ MLFlow UI](/imgs/mlflow.png)
 
-## Grafana Dashboard Example
-# ![Grafana Dashboard](/imgs/grafana.png)
+## Metabase Dashboard Example
+# ![Metabase Dashboard](/imgs/metabase.png)
 
 ## Jupyter Notebook Server
 # ![Jupyter Notebook](/imgs/jupyter-notebook.png)
