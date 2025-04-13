@@ -88,7 +88,6 @@
 ```localhost:8051 -> Streamlit app```
 <br>
 ```localhost:8081 -> Apache Airflow Web UI (default login is user:airflow pass:airflow)```
-
 <br>
 ```localhost:5432 -> PostgreSQL Database (default login is user:user pass: password)```
 <br>
