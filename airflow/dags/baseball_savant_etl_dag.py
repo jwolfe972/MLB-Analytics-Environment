@@ -16,10 +16,6 @@ import numpy as np
 import pendulum
 from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
 import pytz
-from pybaseball import batting_stats_bref
-from pybaseball import playerid_reverse_lookup
-from pybaseball import batting_stats, pitching_stats
-from pybaseball import chadwick_register
 from unidecode import unidecode
 import requests
 from bs4 import BeautifulSoup
@@ -29,7 +25,7 @@ cache.disable()
  # VARIABLES
 ############################################################################################################################
 START_DATE = '2025-01-01'
-#END_DATE = '2020-12-31'
+#END_DATE = '2024-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -100,10 +96,10 @@ TABLE_TABLE_COLUMN_INSERT_DICT = {
 
 'PITCHER_EXTRA_STATS': {
     
-    'columns': '(PITCHER_ID, GAME_YEAR, WINS, LOSSES, ERA, IP, SO, BB, K_9, WHIP, BABIP, STUFF_PLUS, FIP, SV, WAR)',
-    'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-    'conflict': '(PITCHER_ID, GAME_YEAR)',
-    'conflict_updates': ['WINS', 'LOSSES', 'ERA', 'IP', 'SO', 'BB', 'K_9', 'WHIP', 'BABIP', 'STUFF_PLUS', 'FIP', 'SV', 'WAR' ]
+    'columns': '(PITCHER_ID, GAME_DATE, WINS, LOSSES, IP, ER, SO, BB, HBP, IBB, SV, WAR)',
+    'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+    'conflict': '(PITCHER_ID, GAME_DATE)',
+    'conflict_updates': ['WINS', 'LOSSES',  'IP', 'ER', 'SO', 'BB', 'HBP', 'IBB', 'SV', 'WAR' ]
 },
 
 'WOBA_CONSTANTS': {
@@ -202,7 +198,174 @@ def get_batter_stats_by_game(SEASON):
                 df['date'] = date
                 print(df)
                 full_df = pd.concat([full_df, df])
+   
+   
+    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
+    for date in playoffs_range:
+                
+        if datetime.now().date() > date.date():
+            player_id = []
+            ibb = []
+            rbi = []
+            sb = []
+            war = []
+            runs = []
+        
+            date = date.strftime("%Y-%m-%d")
+            print(date)
+            url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason=1'
+            response = requests.get(url)
+
+            k = response.json()
+            
+        
+            if 'data' in k.keys():
+                for row in k['data']:
+                    player_id.append(row['xMLBAMID'])
+                    ibb.append(row['IBB'])
+                    rbi.append(row['RBI'])
+                    sb.append(row['SB'])
+                    war.append(row['WAR'])
+                    runs.append(row['R'])
+                    
+                df_dict = {'player': player_id,
+                        'ibb': ibb,
+                        'rbi': rbi,
+                        'sb': sb,
+                        'war': war,
+                        'runs': runs}
+                
+                df = pd.DataFrame(df_dict)
+                df['date'] = date
+                print(df)
+                full_df = pd.concat([full_df, df])
+        
     return full_df
+
+def get_pitcher_stats_by_game(SEASON):
+    date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
+    full_df = pd.DataFrame()
+    for date in date_range:
+        
+        if datetime.now().date() > date.date():
+            player_id = []
+            wins = []
+            losses = []
+            ip = []
+            so = []
+            bb = []
+            hbp = []
+        #    fip = []
+            er = []
+        #    stuff_plus = []
+            sv = []
+            war = []
+            ibb = []
+        
+            date = date.strftime("%Y-%m-%d")
+            print(date)
+            url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=pit&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason='
+            response = requests.get(url)
+
+            k = response.json()
+            
+        
+            if 'data' in k.keys():
+                for row in k['data']:
+                    player_id.append(row['xMLBAMID'])
+                    wins.append(row['W'])
+                    losses.append(row['L'])
+                    ip.append(row['IP'])
+                    so.append(row['SO'])
+                    bb.append(row['BB'])
+                    hbp.append(row['HBP'])
+             #       fip.append(row['FIP'])
+                    sv.append(row['SV'])
+                    er.append(row['ER'])
+                    war.append(row['WAR'])
+                    ibb.append(row['IBB'])
+                    
+                    
+                df_dict = {'player': player_id,
+                           'wins': wins,
+                           'losses': losses,
+                           'ip': ip,
+                           'so': so,
+                           'bb': bb,
+                           'hbp': hbp,
+                           'sv': sv,
+                           'er': er,
+                           'war': war,
+                           'ibb': ibb}
+                
+                df = pd.DataFrame(df_dict)
+                df['date'] = date
+                print(df)
+                full_df = pd.concat([full_df, df])
+   
+   
+    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
+    for date in playoffs_range:
+        
+        if datetime.now().date() > date.date():
+            player_id = []
+            wins = []
+            losses = []
+            ip = []
+            so = []
+            bb = []
+            hbp = []
+        #    fip = []
+            er = []
+        #    stuff_plus = []
+            sv = []
+            war = []
+            ibb = []
+        
+            date = date.strftime("%Y-%m-%d")
+            print(date)
+            url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=pit&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason=1'
+            response = requests.get(url)
+
+            k = response.json()
+            
+        
+            if 'data' in k.keys():
+                for row in k['data']:
+                    player_id.append(row['xMLBAMID'])
+                    wins.append(row['W'])
+                    losses.append(row['L'])
+                    ip.append(row['IP'])
+                    so.append(row['SO'])
+                    bb.append(row['BB'])
+                    hbp.append(row['HBP'])
+             #       fip.append(row['FIP'])
+                    sv.append(row['SV'])
+                    er.append(row['ER'])
+                    war.append(row['WAR'])
+                    ibb.append(row['IBB'])
+                    
+                    
+                df_dict = {'player': player_id,
+                           'wins': wins,
+                           'losses': losses,
+                           'ip': ip,
+                           'so': so,
+                           'bb': bb,
+                           'hbp': hbp,
+                           'sv': sv,
+                           'er': er,
+                           'war': war,
+                           'ibb': ibb}
+                
+                df = pd.DataFrame(df_dict)
+                df['date'] = date
+                print(df)
+                full_df = pd.concat([full_df, df])
+   
+        
+    return full_df
+
 
 def test_postgres_connection():
     try:
@@ -237,8 +400,7 @@ def transform_name(name):
     last_name, first_name = map(str.strip, name.split(','))
     return f"{first_name} {last_name}"
 
-# This loads the IBB and other batting metrics for batters
-#NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
+#NOTE: Update The null batter and pitch and batter info gets around the issue from before since this scrapes with hitter id
 def loading_other_batter_stats_non_null():
     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
     data = get_batter_stats_by_game(START_YEAR)
@@ -249,60 +411,10 @@ def loading_other_batter_stats_non_null():
 
 #NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
 def loading_other_pitching_stats_non_null():
-    #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = pitching_stats(START_YEAR,
-                         ind=1,
-                         qual=1)
-
-    player_mlbam_ids = chadwick_register()
-
-    data = data.merge(player_mlbam_ids, left_on='IDfg', right_on='key_fangraphs', how='left')
-
-    missing_ids = data[data['key_mlbam'].isnull()]
-    
-    print(f'Players Missing from Chadwick Registry')
-    print(missing_ids['Name'])
+    data = get_pitcher_stats_by_game(SEASON=START_YEAR)
 
     # Filter out null MLB ID records and return those columns
-    return data[~data['key_mlbam'].isnull()][['key_mlbam', 'Season', 'W', 'L', 'ERA', 'IP', 'SO', 'BB', 'K/9', 'WHIP', 'BABIP', 'Stuff+', 'FIP', 'SV', 'WAR']]
-
-
-# def loading_other_batter_stats_name_null_batters():
-#     #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-#     data = batting_stats(start_season=START_YEAR,
-#                          ind=1,
-#                          qual=1)
-
-#     player_mlbam_ids = chadwick_register()
-
-#     data = data.merge(player_mlbam_ids, left_on='IDfg', right_on='key_fangraphs', how='left')
-
-#     missing_ids = data[data['key_mlbam'].isnull()]
-
-#     print(f'Players Missing from Chadwick Registry')
-#     print(missing_ids['Name'])
-#     return missing_ids[['Name', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
-
-def loading_other_pitching_stats_null_pitchers():
-    #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = pitching_stats(START_YEAR,
-                         ind=1,
-                         qual=1)
-    player_mlbam_ids = chadwick_register()
-
-    data = data.merge(player_mlbam_ids, left_on='IDfg', right_on='key_fangraphs', how='left')
-
-    missing_ids = data[data['key_mlbam'].isnull()]
-    
-    print(f'Players Missing from Chadwick Registry')
-    print(missing_ids['Name'])
-
-    # Filter out null MLB ID records and return those columns
-    return data[data['key_mlbam'].isnull()][['Name', 'Season', 'W', 'L', 'ERA', 'IP', 'SO', 'BB', 'K/9', 'WHIP', 'BABIP', 'Stuff+', 'FIP', 'SV', 'WAR']]
-
-
-
-    
+    return data[['player', 'date', 'wins', 'losses', 'ip', 'er', 'so', 'bb', 'hbp', 'ibb', 'sv', 'war']]
 
 def run_sql_file(file_path: str):
     """Executes an SQL file in PostgreSQL using psycopg2."""
@@ -339,8 +451,6 @@ def run_sql_file(file_path: str):
     finally:
         cursor.close()
         conn.close()
-
-
 
 def load_all_game_pk():
     try:
@@ -493,8 +603,6 @@ def load_pitch_table_game_pks():
         print("Error w/ PostgreSQL:", e)
         raise  # raise error for error
 
-
-
 def hit_value_column(value):
     value_dict = {
         'single': 1,
@@ -506,12 +614,6 @@ def hit_value_column(value):
     }
     return value_dict.get(value, 0)
 
-
-def discard_batter_ids(value):
-    if value != 0:
-        return 1
-    else:
-        return 0
 
 
 def load_statcast_data():
@@ -525,8 +627,6 @@ def load_statcast_data():
     else:
         print(f'Only Query 1 full Year worth of data at a time please...')
         raise
-
-
 
 def transform_game_data(df: pd.DataFrame, games: pd.DataFrame):
     # Filter out existing games
@@ -567,7 +667,6 @@ def transform_pitcher_data(df: pd.DataFrame, pitchers: pd.DataFrame):
     pitcher_info.rename(columns={'pitcher': 'pitcher_id', 'player_name': 'pitcher_name'}, inplace=True)
     return pitcher_info
 
-
 def transform_pitcher_data_for_hitter_table(df: pd.DataFrame, pitchers: pd.DataFrame, hitters: pd.DataFrame, new_hitters: pd.DataFrame):
     
     df = df[~df['game_type'].isin(['S', 'E'])]
@@ -582,9 +681,6 @@ def transform_pitcher_data_for_hitter_table(df: pd.DataFrame, pitchers: pd.DataF
     pitcher_info_for_hitter_table.rename(columns={'pitcher_id': 'hitter_id', 'pitcher_name': 'hitter_name'})
     
     return pitcher_info_for_hitter_table
-
-    
-
 
 def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFrame):
 
@@ -698,7 +794,6 @@ def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFra
     print(len(full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454]))
     return pitch_info
     
-
 def transform_hit_data(full_pitch_by_pitch: pd.DataFrame, hit_df: pd.DataFrame ):
 
     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_type'].isin(['S', 'E'])]
@@ -776,7 +871,6 @@ def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame
 
 )
     return play_data
-
 
 def load_tables_many(df: pd.DataFrame, table_name):
     try:
@@ -879,71 +973,6 @@ def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
         print("Error w/ PostgreSQL:", e)
         raise
 
-
-def fix_null_batter_id_batter_stats(missing_df: pd.DataFrame, hitter_df: pd.DataFrame):
-     #missing_ids[['Name', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
-     
-     
-     # This is going to be section of One Spot off Fixes For Point errors in data which when they update Chadwick Registry could be removed
-     missing_df.loc[missing_df['Name'] == 'Matthew Shaw', 'Name'] = 'Matt Shaw'
-     missing_df.loc[missing_df['Name'] == 'Adrian Del Castillo', 'Name'] = "Adrian Del"
-     missing_df.loc[missing_df['Name'] == 'Leonardo Rivas', 'Name'] = 'Leo Rivas'
-     missing_df.loc[missing_df['Name'] == 'DaShawn Keirsey Jr.', 'Name'] = 'DaShawn Keirsey'
-     missing_df.loc[missing_df['Name'] == 'Luis De Los Santos', 'Name'] = 'Luis De'
-     missing_df.loc[missing_df['Name'] == 'Zachary Dezenzo', 'Name'] = 'Zach Dezenzo'
-     missing_df.loc[missing_df['Name'] == 'C.J. Alexander', 'Name'] = 'CJ Alexander'
-     missing_df.loc[missing_df['Name'] == 'Cameron Smith', 'Name'] = 'Cam Smith'
-     
-     
-     
-     hitter_df['hitter_name'] = hitter_df['hitter_name'].apply(remove_accent_marks)
-     
-     
-     missing_df = missing_df.merge(hitter_df, left_on='Name', right_on='hitter_name', how='left')
-     
-     missing_ids = missing_df[missing_df['hitter_id'].isnull()]
-     
-     
-     print(f'These records need a fix for their batter_stats')
-     print(missing_ids[['Name', 'Season']])
-     
-     
-     non_missing_ids = missing_df[~missing_df['hitter_id'].isnull()]
-     
-     return non_missing_ids[['hitter_id', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
- 
-def fix_null_pitcher_id_pitcher_stats(missing_df: pd.DataFrame, pitcher_df: pd.DataFrame):
-     #missing_ids[['Name', 'Season', 'IBB', 'RBI', 'R', 'SB', 'WAR']]
-     
-     
-     # This is going to be section of One Spot off Fixes For Point errors in data which when they update Chadwick Registry could be removed
-    missing_df.loc[missing_df['Name'] == 'Jacob Eder', 'Name'] = 'Jake Eder'
-    missing_df.loc[missing_df['Name'] == 'Leonardo Rivas', 'Name'] = 'Leo Rivas'
-    missing_df.loc[missing_df['Name'] == 'Samuel Aldegheri', 'Name'] = 'Sam Aldegheri'
-    missing_df.loc[missing_df['Name'] == 'Jacob Dreyer', 'Name'] = 'Jack Dreyer'
-    missing_df.loc[missing_df['Name'] == 'Bradley Lord', 'Name'] = 'Brad Lord'
-    missing_df.loc[missing_df['Name'] == 'Tomoyoki Sugano', 'Name'] = 'Tomoyuki Sugano'
-    
-   
-     
-    pitcher_df['pitcher_name'] = pitcher_df['pitcher_name'].apply(transform_name)
-    pitcher_df['pitcher_name'] = pitcher_df['pitcher_name'].apply(remove_accent_marks)
-    
-    
-    missing_df = missing_df.merge(pitcher_df, left_on='Name', right_on='pitcher_name', how='left')
-    
-    missing_ids = missing_df[missing_df['pitcher_id'].isnull()]
-    
-    
-    print(f'These records need a fix for their batter_stats')
-    print(missing_ids[['Name', 'Season']])
-    
-    
-    non_missing_ids = missing_df[~missing_df['pitcher_id'].isnull()]
-    
-    return non_missing_ids[['pitcher_id',  'Season', 'W', 'L', 'ERA', 'IP', 'SO', 'BB', 'K/9', 'WHIP', 'BABIP', 'Stuff+', 'FIP', 'SV', 'WAR']]
-    
-
 # The Dag Process that Runs in Airflow
 with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
     slack_success = SlackWebhookOperator(
@@ -1015,11 +1044,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
         
-        # load_missing_mlb_id_batting_stats_task = PythonOperator(
-        #     task_id='load_batting_stats_null',
-        #     python_callable=loading_other_batter_stats_name_null_batters,
-        #     dag=dag
-        # )
         
         load_pitching_stats_task = PythonOperator(
             task_id='load-pitching_stats_non_null',
@@ -1027,12 +1051,7 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
         
-        load_pitching_stats_missing_task = PythonOperator(
-            task_id='load-pitching-stats-null',
-            python_callable=loading_other_pitching_stats_null_pitchers,
-            dag=dag
-        )
-        connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task  >> load_pitching_stats_task >> load_pitching_stats_missing_task
+        connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task  >> load_pitching_stats_task 
 
     with TaskGroup("Load-DB-Current-DW-Info") as get_current_dw_info:
         game_pks = PythonOperator(
@@ -1170,13 +1189,12 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         
         load_game_table >> load_hitter_table >>  load_hitter_table_w_pitchers >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
-    with TaskGroup("Load-Batter-Stats-table") as load_batter_stats:
+    with TaskGroup("Load-Stats-Tables") as load_stats_stats:
         load_woba_constants_table_task = PythonOperator(
             task_id='load-woba-constants-table',
             python_callable=load_tables_many_on_conflict,
             op_args=[extract_woba_constants_task.output, 'WOBA_CONSTANTS' ]
         )
-        
         
         load_non_null_pitchers_task = PythonOperator(
             task_id='load-pitcher-stats',
@@ -1184,17 +1202,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             op_args=[load_pitching_stats_task.output, 'PITCHER_EXTRA_STATS']
         )
         
-        hitters_pks_for_null = PythonOperator(
-            task_id='load_all_hitter_pk_for_null_fix',
-            python_callable=load_all_hitter_pk,
-            dag=dag
-        )
-        
-        pitcher_pk_for_null = PythonOperator(
-            task_id='load-all-pitcher-pk-for-null-fix',
-            python_callable=load_all_pitcher_pk,
-            dag=dag
-        )
         
         load_non_null_info_task = PythonOperator(
             task_id='load-batter-stats',
@@ -1203,39 +1210,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
         
-        # load_null_info_task = PythonOperator(
-        #     task_id='fix-up-null-batter-ids',
-        #     python_callable=fix_null_batter_id_batter_stats,
-        #     op_args=[load_missing_mlb_id_batting_stats_task.output, hitters_pks_for_null.output ],
-        #     dag=dag
-        # )
-        
-        
-        load_null_pitcher_info_task = PythonOperator(
-            
-            task_id='fix-up-null-pitcher-ids',
-            python_callable=fix_null_pitcher_id_pitcher_stats,
-            op_args=[load_pitching_stats_missing_task.output, pitcher_pk_for_null.output ]
-            
-        )
-        
-        # load_null_to_table = PythonOperator(
-        #     task_id='load-null-batter-stats-into-table',
-        #     python_callable=load_tables_many_on_conflict,
-        #     op_args=[load_null_info_task.output, 'BATTER_EXTRA_STATS'],
-        #     dag=dag
-        # )
-        
-        load_null_to_table_pitchers = PythonOperator(
-            task_id='load-null-pitcher-stats-into-table',
-            python_callable=load_tables_many_on_conflict,
-            op_args=[load_null_pitcher_info_task.output, 'PITCHER_EXTRA_STATS'],
-            dag=dag
-        )
-        
-        
-        
-        
-        load_woba_constants_table_task >>load_non_null_info_task >> load_non_null_pitchers_task >> hitters_pks_for_null >> pitcher_pk_for_null >>  load_null_pitcher_info_task >> load_null_to_table_pitchers
+        load_woba_constants_table_task >> load_non_null_info_task >> load_non_null_pitchers_task
 
-    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_batter_stats >> [slack_success, slack_failure]
+    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_stats_stats >> [slack_success, slack_failure]
