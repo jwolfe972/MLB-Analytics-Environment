@@ -11,11 +11,15 @@ WHERE player.PITCHER_NAME LIKE '%Eovaldi%'
 
 
 -- get woba leaders
+-- get woba leaders
+-- get woba leaders
 WITH other_baseball_stats as (
 
-SELECT * FROM
+SELECT HITTER_ID ,SUM(IBB) AS IBB,SUM(RBIS) AS RBIS,SUM(WAR) AS WAR , MAX(GAME_DATE) AS GAME_DATE
+FROM
 BATTER_EXTRA_STATS
-WHERE GAME_YEAR = 2025
+WHERE EXTRACT( YEAR  FROM GAME_DATE) = 2025 and game_date BETWEEN '2025-04-01' AND '2025-04-15'
+GROUP BY HITTER_ID
 
 
 ),
@@ -38,17 +42,18 @@ batting_stats AS (
     LEFT JOIN PITCH_INFO_FACT fact ON fact.PLAY_ID = play.PLAY_ID
     LEFT JOIN HITTER_INFO_DIM batter ON batter.HITTER_ID = fact.BATTER_ID
     LEFT JOIN GAME_INFO_DIM game ON game.GAME_PK = fact.GAME_ID
-    WHERE game.game_type = 'R' AND game.game_year = 2025
+    WHERE game.game_type = 'R' AND EXTRACT(YEAR FROM game.game_date) = 2025 AND game_date BETWEEN '2025-04-01' AND '2025-04-15'
     GROUP BY batter.HITTER_ID
 ),
 latest_team AS (
     SELECT
         fact.BATTER_ID,
         fact.HITTER_TEAM AS most_recent_team,
+        game.game_date,
         ROW_NUMBER() OVER (PARTITION BY fact.BATTER_ID ORDER BY game.game_date DESC) AS rn
     FROM PITCH_INFO_FACT fact
     LEFT JOIN GAME_INFO_DIM game ON game.GAME_PK = fact.GAME_ID
-    WHERE game.game_year = 2025
+    WHERE EXTRACT(YEAR FROM game.game_date) = 2025 AND  game_date BETWEEN '2025-04-01' AND '2025-04-15'
 ),
 
 woba_constants as (
@@ -64,10 +69,13 @@ stats_table AS (
         stats.walks,
         latest.most_recent_team,
 		stats.num_pa,
-		other.NUM_INTENT_WALKS,
-		other.NUM_RBIS,
+		other.IBB,
+		other.RBIS,
 		other.WAR,
         stats.num_HRs,
+        other.GAME_DATE,
+        woba.Season,
+        EXTRACT(YEAR FROM latest.game_date) as tm_year,
 		CASE
 			WHEN stats.total_ab > 0 THEN ROUND( CAST( (1*stats.num_singles + 2*stats.num_doubles + 3*stats.num_triples + 4*num_hrs) AS DECIMAL ) / CAST(stats.total_ab AS DECIMAL)   , 4)
 			ELSE NULL
@@ -77,7 +85,7 @@ stats_table AS (
             ELSE NULL
         END AS BA,
         CASE
-            WHEN (stats.total_ab + stats.walks + stats.SF + other.NUM_INTENT_WALKS) > 0 THEN ROUND(( (CAST(num_OBP AS DECIMAL) + other.NUM_INTENT_WALKS ) / (stats.total_ab + stats.walks + stats.SF + other.NUM_INTENT_WALKS)), 4)
+            WHEN (stats.total_ab + stats.walks + stats.SF + other.IBB) > 0 THEN ROUND(( (CAST(num_OBP AS DECIMAL) + other.IBB ) / (stats.total_ab + stats.walks + stats.SF + other.IBB)), 4)
             ELSE NULL
         END AS OBP,
 		CASE
@@ -91,10 +99,13 @@ stats_table AS (
     LEFT JOIN HITTER_INFO_DIM batter ON batter.HITTER_ID = stats.HITTER_ID
     LEFT JOIN latest_team latest ON latest.BATTER_ID = stats.HITTER_ID AND latest.rn = 1
 	LEFT JOIN other_baseball_stats other ON other.HITTER_ID = batter.HITTER_ID
-	LEFT JOIN woba_constants woba on woba.Season = other.GAME_YEAR
- WHERE stats.num_pa > 9  * 3.1 AND other.GAME_YEAR = 2025
+	LEFT JOIN woba_constants woba on woba.Season = EXTRACT( YEAR FROM other.GAME_DATE)
+ WHERE stats.num_pa >= 40 --AND EXTRACT(YEAR FROM other.GAME_DATE) = 2025 
 )
-SELECT hitter_name AS "Player", most_recent_team as "Tm", (num_pa + NUM_INTENT_WALKS) as "PA", ba as "BA", obp as "OBP", slg as "SLG", ROUND(obp+slg, 4) AS "OPS", woba as "wOBA", hit_count as "H", num_HRs as "HRs", walks as "BB", NUM_INTENT_WALKS AS "IBB", NUM_RBIS AS "RBIs", WAR as "WAR"
+
+
+
+SELECT hitter_name AS "Player", most_recent_team as "Tm", (num_pa + IBB) as "PA", ba as "BA", obp as "OBP", slg as "SLG", ROUND(obp+slg, 4) AS "OPS", woba as "wOBA", hit_count as "H", num_HRs as "HRs", walks as "BB", IBB AS "IBB", RBIS AS "RBIs", WAR as "WAR", GAME_DATE -- Season, tm_year
 FROM stats_table
 WHERE obp IS NOT NULL AND ba is not null AND slg IS NOT NULL
 ORDER BY  "wOBA" DESC;
