@@ -1,3 +1,25 @@
+"""
+MLB Baseball Savant/ Fangraphs ETL DAG
+
+@Author Jordan Wolfe
+@LastUpdated 2025-04-14
+
+Purpose of This Program:
+
+This program is an Apache Airflow DAG that automates the process of pulling Statcast Pitch-By-Pitch Data and
+also scraping batting and pitching statistics from Fangraphs for storing this data for Analysis, ML, and BI Purposes.
+
+To Run this Program after starting the containers using the docker compose up -d command, make sure to first Follow
+the steps in the Setting_Up_Slack_Connection_Airflow.pdf file for creating a slack connection for sending notifications
+on the status of your DAG runs (Make sure to name the slack connection -> slack_conn).
+
+
+Upon proceeding to the Airflow UI on localhost:8081 or any changed port all you would need to do is unpause the DAG named
+'baseball-savant-etl-dag' to start the scheduled process. This program is set to run on cycle daily at 9:30 CST. every morning.
+to have it run. The default start and end dates are for the current 2025 season as I am writing this, but feel free to
+adjust the `START_DATE` and `END_DATE` in the same format for future seasons past 2025 and for past seasons as well
+(Limit only 1 full season per DAG load for RAM purposes).
+"""
 import time
 from datetime import datetime, timedelta
 from airflow.models.dag import DAG
@@ -19,13 +41,13 @@ import pytz
 from unidecode import unidecode
 import requests
 from bs4 import BeautifulSoup
-#TODO: Write up documentation for this ETL Process
 
 cache.disable()
+########################################################################################################################
  # VARIABLES
-############################################################################################################################
+########################################################################################################################
 START_DATE = '2025-01-01'
-#END_DATE = '2024-12-31'
+#END_DATE = '2023-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -119,12 +141,9 @@ default_args = {
     'start_date': pendulum.datetime(2025, 3, 21, tz="America/Chicago")
 }
 
-
-
-
-
-#############################################################################################################################
-
+########################################################################################################################
+# Functions for Extracting Data
+########################################################################################################################
 def load_fangraphs_woba_constants():
     # Step 1: Fetch the page content
     url = 'https://www.fangraphs.com/guts.aspx?type=cn'
@@ -198,8 +217,7 @@ def get_batter_stats_by_game(SEASON):
                 df['date'] = date
                 print(df)
                 full_df = pd.concat([full_df, df])
-   
-   
+
     playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
     for date in playoffs_range:
                 
@@ -367,6 +385,21 @@ def get_pitcher_stats_by_game(SEASON):
     return full_df
 
 
+def load_statcast_data():
+    # cache.enable()
+    if START_YEAR == END_YEAR:
+        data = statcast(START_DATE, END_DATE)
+        # data = statcast('2023-03-01', '2023-09-30')
+        print(data.head(10))
+
+        return data
+    else:
+        print(f'Only Query 1 full Year worth of data at a time please...')
+        raise
+########################################################################################################################
+########################################################################################################################
+# Functions for Loading Current Data
+########################################################################################################################
 def test_postgres_connection():
     try:
         # Define connection parameters
@@ -390,68 +423,6 @@ def test_postgres_connection():
         print("Error connecting to PostgreSQL:", e)
         raise  # raise error for error
 
-
-def remove_accent_marks(value):
-    # Apply unidecode to the 'name' column
-    return unidecode(value)
-
-# Used for pitcher's name
-def transform_name(name):
-    last_name, first_name = map(str.strip, name.split(','))
-    return f"{first_name} {last_name}"
-
-#NOTE: Update The null batter and pitch and batter info gets around the issue from before since this scrapes with hitter id
-def loading_other_batter_stats_non_null():
-    #data = batting_stats_bref(YEAR_FOR_INTENT_WALK)
-    data = get_batter_stats_by_game(START_YEAR)
-
-    # Filter out null MLB ID records and return those columns
-    return data[['player', 'date', 'ibb', 'rbi', 'runs', 'sb', 'war']]
-
-
-#NOTE: The Chadwick Register is not always completely up to date on all players so I have implemented a work around
-def loading_other_pitching_stats_non_null():
-    data = get_pitcher_stats_by_game(SEASON=START_YEAR)
-
-    # Filter out null MLB ID records and return those columns
-    return data[['player', 'date', 'wins', 'losses', 'ip', 'er', 'so', 'bb', 'hbp', 'ibb', 'sv', 'war']]
-
-def run_sql_file(file_path: str):
-    """Executes an SQL file in PostgreSQL using psycopg2."""
-    
-    # Establish a connection
-    conn = psycopg2.connect(
-        dbname="MLB_DATA",
-        user="user",
-        password="password",
-        host="postgres",
-        port="5432"
-    )
-        
-
-    cursor = conn.cursor()
-    
-    try:
-        # Read the SQL file
-        with open(file_path, "r", encoding="utf-8") as sql_file:
-            sql_script = sql_file.read()
-        
-        # Execute the SQL script
-        cursor.execute(sql_script)
-        
-        # Commit the transaction
-        conn.commit()
-        print(f"Successfully executed SQL file: {file_path}")
-    
-    except Exception as e:
-        conn.rollback()  # Rollback on error
-        print(f"Error executing SQL file: {e}")
-        raise
-    
-    finally:
-        cursor.close()
-        conn.close()
-
 def load_all_game_pk():
     try:
         # Define connection parameters
@@ -462,10 +433,10 @@ def load_all_game_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT game_pk FROM GAME_INFO_DIM;"
         game_pks = pd.read_sql(sql, conn)
-        
+
         print("Game PKS Loaded")
         return game_pks  # Return the connection object if successful
 
@@ -484,10 +455,10 @@ def load_all_hitter_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT hitter_id, hitter_name FROM HITTER_INFO_DIM;"
         hitter_pks = pd.read_sql(sql, conn)
-        
+
         print("Hitter PKS Loaded")
         return hitter_pks  # Return the connection object if successful
 
@@ -506,16 +477,17 @@ def load_all_pitcher_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT pitcher_id, pitcher_name FROM PITCHER_INFO_DIM;"
         pitcher_pks = pd.read_sql(sql, conn)
-        
+
         print("Pitcher PKS Loaded")
         return pitcher_pks  # Return the connection object if successful
 
     except psycopg2.Error as e:
         print("Error w/ PostgreSQL:", e)
         raise  # raise error for error
+
 
 def load_all_pitch_pk():
     try:
@@ -527,16 +499,17 @@ def load_all_pitch_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT PITCH_ID FROM PITCH_INFO_FACT;"
         pitch_pks = pd.read_sql(sql, conn)
-        
+
         print("Pitch PKS Loaded")
         return pitch_pks
 
     except psycopg2.Error as e:
         print("Error w/ PostgreSQL:", e)
         raise  # raise error for error
+
 
 def load_all_hit_pk():
     try:
@@ -548,10 +521,10 @@ def load_all_hit_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT HIT_ID FROM HIT_INFO_DIM;"
         hit_pks = pd.read_sql(sql, conn)
-        
+
         print("Hit PKS Loaded")
         return hit_pks
 
@@ -570,10 +543,10 @@ def load_all_play_pk():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT PLAY_ID FROM PLAY_INFO_DIM;"
         play_pks = pd.read_sql(sql, conn)
-        
+
         print("Play PKS Loaded")
         return play_pks
 
@@ -592,16 +565,79 @@ def load_pitch_table_game_pks():
             host="postgres",
             port="5432"
         )
-        
+
         sql = "SELECT DISTINCT PITCH_ID from PITCH_INFO_FACT;"
         fct_game_pks = pd.read_sql(sql, conn)
-        
+
         print("Fact tbl game PKS Loaded")
         return fct_game_pks
 
     except psycopg2.Error as e:
         print("Error w/ PostgreSQL:", e)
         raise  # raise error for error
+
+
+def run_sql_file(file_path: str):
+    """Executes an SQL file in PostgreSQL using psycopg2."""
+
+    # Establish a connection
+    conn = psycopg2.connect(
+        dbname="MLB_DATA",
+        user="user",
+        password="password",
+        host="postgres",
+        port="5432"
+    )
+
+    cursor = conn.cursor()
+
+    try:
+        # Read the SQL file
+        with open(file_path, "r", encoding="utf-8") as sql_file:
+            sql_script = sql_file.read()
+
+        # Execute the SQL script
+        cursor.execute(sql_script)
+
+        # Commit the transaction
+        conn.commit()
+        print(f"Successfully executed SQL file: {file_path}")
+
+    except Exception as e:
+        conn.rollback()  # Rollback on error
+        print(f"Error executing SQL file: {e}")
+        raise
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+########################################################################################################################
+# Functions for loading Fangraphs Stats
+########################################################################################################################
+
+def loading_other_batter_stats_non_null():
+    data = get_batter_stats_by_game(START_YEAR)
+
+    return data[['player', 'date', 'ibb', 'rbi', 'runs', 'sb', 'war']]
+
+def loading_other_pitching_stats_non_null():
+    data = get_pitcher_stats_by_game(SEASON=START_YEAR)
+    return data[['player', 'date', 'wins', 'losses', 'ip', 'er', 'so', 'bb', 'hbp', 'ibb', 'sv', 'war']]
+
+########################################################################################################################
+# Data Transformation Functions
+#######################################################################################################################
+def remove_accent_marks(value):
+    # Apply unidecode to the 'name' column
+    return unidecode(value)
+
+# Used for pitcher's name
+def transform_name(name):
+    last_name, first_name = map(str.strip, name.split(','))
+    return f"{first_name} {last_name}"
+
 
 def hit_value_column(value):
     value_dict = {
@@ -613,20 +649,6 @@ def hit_value_column(value):
         "hit_by_pitch": .5
     }
     return value_dict.get(value, 0)
-
-
-
-def load_statcast_data():
-    #cache.enable()
-    if START_YEAR == END_YEAR:
-        data = statcast(START_DATE, END_DATE)
-        #data = statcast('2023-03-01', '2023-09-30')
-        print(data.head(10))
-        
-        return data
-    else:
-        print(f'Only Query 1 full Year worth of data at a time please...')
-        raise
 
 def transform_game_data(df: pd.DataFrame, games: pd.DataFrame):
     # Filter out existing games
@@ -656,7 +678,6 @@ def transform_hitter_data(df: pd.DataFrame, hitters: pd.DataFrame):
     hitter_info.rename(columns={'batter': 'hitter_id'}, inplace=True)
     hitter_info = hitter_info.drop_duplicates(subset=['hitter_id'], keep='first')
     return hitter_info
-
 
 def transform_pitcher_data(df: pd.DataFrame, pitchers: pd.DataFrame):
 
@@ -832,7 +853,6 @@ def transform_hit_data(full_pitch_by_pitch: pd.DataFrame, hit_df: pd.DataFrame )
 
     return hit_data
 
-
 def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame):
 
     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_type'].isin(['S', 'E'])]
@@ -871,7 +891,9 @@ def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame
 
 )
     return play_data
-
+########################################################################################################################
+# Loading Tables Functions
+########################################################################################################################
 def load_tables_many(df: pd.DataFrame, table_name):
     try:
         # Define connection parameters
@@ -882,13 +904,13 @@ def load_tables_many(df: pd.DataFrame, table_name):
             host="postgres",
             port="5432"
         )
-        
+
         cursor = conn.cursor()
 
         # Define the columns and values format from the dictionary
         columns = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['columns']
         values = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['values']
-        
+
 
         #needed for pscyopg2 to insert null values
         df = df.replace({np.NaN: None})
@@ -896,13 +918,13 @@ def load_tables_many(df: pd.DataFrame, table_name):
         # Convert numpy.int64 to Python int for the dataframe values
         def convert_types(row):
             return tuple(int(value) if isinstance(value, np.int64) else value for value in row)
-        
+
         # Convert the dataframe rows to a list of tuples with appropriate type handling
         data = [convert_types(x) for x in df.itertuples(index=False, name=None)]
 
         # SQL query with placeholders (%s)
         sql = f'INSERT INTO {table_name} {columns} VALUES {values};'
-        
+
         print(sql)  # Debugging: print the query
 
         # Execute batch insert
@@ -928,7 +950,7 @@ def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
             host="postgres",
             port="5432"
         )
-        
+
         cursor = conn.cursor()
 
         # Get column and query formatting info from your dictionary
@@ -972,6 +994,7 @@ def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
     except psycopg2.Error as e:
         print("Error w/ PostgreSQL:", e)
         raise
+########################################################################################################################
 
 # The Dag Process that Runs in Airflow
 with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", default_args=default_args, catchup=False) as dag:
@@ -1211,5 +1234,4 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         )
         
         load_woba_constants_table_task >> load_non_null_info_task >> load_non_null_pitchers_task
-
     load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_stats_stats >> [slack_success, slack_failure]
