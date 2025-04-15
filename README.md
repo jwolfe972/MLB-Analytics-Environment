@@ -8,7 +8,6 @@
 <p><a target="_blank" href="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" style="display: inline-block;"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="python" width="42" height="42" /></a>
 <a target="_blank" href="https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original-wordmark.svg" style="display: inline-block;"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original-wordmark.svg" alt="postgresql" width="42" height="42" /></a>
 <a target="_blank" href="https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original-wordmark.svg" style="display: inline-block;"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original-wordmark.svg" alt="redis" width="42" height="42" /></a>
-<a target="_blank" href="https://www.vectorlogo.zone/logos/grafana/grafana-icon.svg" style="display: inline-block;"><img src="https://www.vectorlogo.zone/logos/grafana/grafana-icon.svg" alt="grafana" width="42" height="42" /></a>
 <a target="_blank" href="https://raw.githubusercontent.com/devicons/devicon/master/icons/docker/docker-original-wordmark.svg" style="display: inline-block;"><img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/docker/docker-original-wordmark.svg" alt="docker" width="42" height="42" /></a>
 <a target="_blank" href="https://www.vectorlogo.zone/logos/gnu_bash/gnu_bash-icon.svg" style="display: inline-block;"><img src="https://www.vectorlogo.zone/logos/gnu_bash/gnu_bash-icon.svg" alt="bash" width="42" height="42" /></a>
 <a target="_blank" href="https://www.vectorlogo.zone/logos/getpostman/getpostman-icon.svg" style="display: inline-block;"><img src="https://www.vectorlogo.zone/logos/getpostman/getpostman-icon.svg" alt="postman" width="42" height="42" /></a>
@@ -44,7 +43,7 @@
     - Apache Airflow (Automated Data Pipeline for updating data)
     - PostgreSQL (Storing Historical Data)
     - MLFlow (For ML Tracking, Storage and Deployment)
-    - ** Extra Grafana (For Dashboarding Savant Data)
+    - ** Extra Metabase (For BI/Dashboards)
     - ** Extra Jupyter Notebook Server (For creating notebooks for analysis)
     - Docker and Docker Compose (Stacking the application all together)
 
@@ -114,8 +113,8 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ### Also due to RAM limitiations only do one full season per load or sometime less than that depending on the RAM for your machine. Or adjust the Memory Allocation for your Docker Container setup
 
-## Diagram of the Services
-# ![Diagram](/imgs/diagram.png)
+## Use case UML Diagram
+# ![use_case_diagram.png](imgs/use_case_diagram.png)
 
 
 ## UI Demo
