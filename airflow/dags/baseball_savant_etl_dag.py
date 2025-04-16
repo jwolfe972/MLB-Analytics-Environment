@@ -1,8 +1,10 @@
 """
+TODO: Bring in standings information
 MLB Baseball Savant/ Fangraphs ETL DAG
 
 @Author Jordan Wolfe
-@LastUpdated 2025-04-14
+@LastUpdated 2025-04-16
+@Email jwolfe972@gmail.com
 
 Purpose of This Program:
 
@@ -19,6 +21,14 @@ Upon proceeding to the Airflow UI on localhost:8081 or any changed port all you 
 to have it run. The default start and end dates are for the current 2025 season as I am writing this, but feel free to
 adjust the `START_DATE` and `END_DATE` in the same format for future seasons past 2025 and for past seasons as well
 (Limit only 1 full season per DAG load for RAM purposes).
+
+
+Going Forward Update Logs
+
+- 2025-04-16 -> Found unintended bug that when FK violation on stats load it will rollback all 'good' transactions so
+I added a commit for each loop so mitigate this issue (In the load table many conflict function)
+
+
 """
 import time
 from datetime import datetime, timedelta
@@ -46,9 +56,9 @@ cache.disable()
 ########################################################################################################################
  # VARIABLES
 ########################################################################################################################
-START_DATE = '2025-01-01'
-#END_DATE = '2023-12-31'
-END_DATE = datetime.now().strftime('%Y-%m-%d')
+START_DATE = '2024-01-01'
+END_DATE = '2024-12-31'
+#END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
 
@@ -979,6 +989,7 @@ def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
         for row in data:
             try:
                 cursor.execute(sql, row)
+                conn.commit()
             except psycopg2.errors.ForeignKeyViolation:
                 print(f"Skipping row due to FK violation: {row}")
                 conn.rollback()
