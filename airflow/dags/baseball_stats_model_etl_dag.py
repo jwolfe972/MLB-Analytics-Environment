@@ -1043,7 +1043,7 @@ with DAG(dag_id='load_mlb_game_prediction', start_date=pendulum.datetime(2025,3,
         load_model_data = PythonOperator(
             task_id='load_model_data',
             python_callable=load_baseball_fg_team_game_data,
-            op_args=[2010],
+            op_args=[2000],
             dag=dag
         )
 

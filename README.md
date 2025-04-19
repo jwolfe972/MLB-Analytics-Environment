@@ -139,7 +139,7 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ## **Phase 2:** Description of the Used Machine Learning and Design of User Interface *(Due 03/28/2025)* ✅
 
-## **Phase 3:** Extending the Architecture of an existing ML-based system *(Due 04/20/2025)* 🚧
+## **Phase 3:** Extending the Architecture of an existing ML-based system *(Due 04/20/2025)* ✅
 
 ## **Phase 4:** Develop a User Interface *(Due 05/04/2025)* 🚧
 
