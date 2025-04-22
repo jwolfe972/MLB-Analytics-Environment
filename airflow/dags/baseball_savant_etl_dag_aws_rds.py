@@ -37,6 +37,9 @@ AWS RDS PostgreSQL database. For the variables below, you would need to setup so
 
 - 2025-04-21
     Added check for plate apperances
+    
+- 2025-04-22
+    Added retries on the fangraph scrape methods
 
 
 """
@@ -80,7 +83,7 @@ DB_NAME= os.getenv("DB_NAME")
 DB_PORT= os.getenv("DB_PORT")
 
 START_DATE = '2025-01-01'
-#END_DATE = '2024-12-31'
+#END_DATE = '2020-12-31'
 
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -1226,7 +1229,9 @@ with DAG(dag_id='baseball-savant-etl-workflow-aws-rds', schedule_interval="30 9 
         extract_woba_constants_task = PythonOperator(
             task_id='extract_woba_constants-task',
             python_callable=load_fangraphs_woba_constants,
-            dag=dag
+            dag=dag,
+            retries=3,
+            retry_delay=timedelta(seconds=30)
         )
         get_pybabseball_data = PythonOperator(
             task_id='load_statcast_data',
@@ -1239,12 +1244,16 @@ with DAG(dag_id='baseball-savant-etl-workflow-aws-rds', schedule_interval="30 9 
         load_batting_stats_task = PythonOperator(
             task_id='load_batting_stats_non_null',
             python_callable=loading_other_batter_stats_non_null,
+            retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
 
         load_pitching_stats_task = PythonOperator(
             task_id='load-pitching_stats_non_null',
             python_callable=loading_other_pitching_stats_non_null,
+            retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
 

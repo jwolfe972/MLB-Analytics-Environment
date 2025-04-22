@@ -29,6 +29,13 @@ Going Forward Update Logs
 I added a commit for each loop so mitigate this issue (In the load table many conflict function)
 
 
+- 2025-04-21
+    Added check for plate apperances
+    
+- 2025-04-22
+    Added retries on the fangraph scrape methods
+
+
 """
 import time
 from datetime import datetime, timedelta
@@ -189,8 +196,9 @@ def load_fangraphs_woba_constants():
 def get_batter_stats_by_game(SEASON):
     date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
     full_df = pd.DataFrame()
+    int_columns = ['player', 'ibb', 'rbi', 'sb', 'runs']
     for date in date_range:
-        
+
         if datetime.now().date() > date.date():
             player_id = []
             ibb = []
@@ -198,15 +206,15 @@ def get_batter_stats_by_game(SEASON):
             sb = []
             war = []
             runs = []
-        
+            pa = []
+
             date = date.strftime("%Y-%m-%d")
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason='
             response = requests.get(url)
 
             k = response.json()
-            
-        
+
             if 'data' in k.keys():
                 for row in k['data']:
                     player_id.append(row['xMLBAMID'])
@@ -215,14 +223,16 @@ def get_batter_stats_by_game(SEASON):
                     sb.append(row['SB'])
                     war.append(row['WAR'])
                     runs.append(row['R'])
-                    
+                    pa.append(row['PA'])
+
                 df_dict = {'player': player_id,
-                        'ibb': ibb,
-                        'rbi': rbi,
-                        'sb': sb,
-                        'war': war,
-                        'runs': runs}
-                
+                           'ibb': ibb,
+                           'rbi': rbi,
+                           'sb': sb,
+                           'war': war,
+                           'runs': runs,
+                           'pa': pa}
+
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
                 print(df)
@@ -230,7 +240,7 @@ def get_batter_stats_by_game(SEASON):
 
     playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
     for date in playoffs_range:
-                
+
         if datetime.now().date() > date.date():
             player_id = []
             ibb = []
@@ -238,15 +248,15 @@ def get_batter_stats_by_game(SEASON):
             sb = []
             war = []
             runs = []
-        
+            pa = []
+
             date = date.strftime("%Y-%m-%d")
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason=1'
             response = requests.get(url)
 
             k = response.json()
-            
-        
+
             if 'data' in k.keys():
                 for row in k['data']:
                     player_id.append(row['xMLBAMID'])
@@ -255,19 +265,29 @@ def get_batter_stats_by_game(SEASON):
                     sb.append(row['SB'])
                     war.append(row['WAR'])
                     runs.append(row['R'])
-                    
+                    pa.append(row['PA'])
+
                 df_dict = {'player': player_id,
-                        'ibb': ibb,
-                        'rbi': rbi,
-                        'sb': sb,
-                        'war': war,
-                        'runs': runs}
-                
+                           'ibb': ibb,
+                           'rbi': rbi,
+                           'sb': sb,
+                           'war': war,
+                           'runs': runs,
+                           'pa': pa}
+
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
+
+                df = df[df['pa'] > 0]
                 print(df)
+
                 full_df = pd.concat([full_df, df])
-        
+
+    for col in int_columns:
+        full_df[col] = full_df[col].astype(int)
+
+    
+    full_df = full_df[full_df['pa'] > 0]
     return full_df
 
 def get_pitcher_stats_by_game(SEASON):
@@ -1062,6 +1082,8 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         extract_woba_constants_task = PythonOperator(
             task_id='extract_woba_constants-task',
             python_callable=load_fangraphs_woba_constants,
+            retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
         get_pybabseball_data = PythonOperator(
@@ -1075,6 +1097,8 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         load_batting_stats_task = PythonOperator(
             task_id='load_batting_stats_non_null',
             python_callable=loading_other_batter_stats_non_null,
+            retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
         
@@ -1082,6 +1106,8 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         load_pitching_stats_task = PythonOperator(
             task_id='load-pitching_stats_non_null',
             python_callable=loading_other_pitching_stats_non_null,
+            retries=3,
+            retry_delay=timedelta(seconds=30),
             dag=dag
         )
         
