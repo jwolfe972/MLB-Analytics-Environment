@@ -6,3 +6,4 @@
 /.idea
 /jupyter/notebooks/.ipynb_checkpoints
 /jupyter/notebooks/243_26053_29-pycharm-support-libs
+airflow/.env
