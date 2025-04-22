@@ -3,7 +3,7 @@ TODO: Bring in standings information
 MLB Baseball Savant/ Fangraphs ETL DAG
 
 @Author Jordan Wolfe
-@LastUpdated 2025-04-16
+@LastUpdated 2025-04-21
 @Email jwolfe972@gmail.com
 
 Purpose of This Program:
@@ -34,6 +34,9 @@ AWS RDS PostgreSQL database. For the variables below, you would need to setup so
 - Secret in SecretManager for connecting to Database
 - VPC
 - Security Group Inbounds Rules
+
+- 2025-04-21
+    Added check for plate apperances
 
 
 """
@@ -281,6 +284,7 @@ def get_batter_stats_by_game(SEASON):
             sb = []
             war = []
             runs = []
+            pa = []
 
             date = date.strftime("%Y-%m-%d")
             print(date)
@@ -297,13 +301,15 @@ def get_batter_stats_by_game(SEASON):
                     sb.append(row['SB'])
                     war.append(row['WAR'])
                     runs.append(row['R'])
+                    pa.append(row['PA'])
 
                 df_dict = {'player': player_id,
                            'ibb': ibb,
                            'rbi': rbi,
                            'sb': sb,
                            'war': war,
-                           'runs': runs}
+                           'runs': runs,
+                           'pa': pa}
 
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
