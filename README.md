@@ -70,13 +70,15 @@
 
     Step 2: Make Sure the Docker Engine is running (Open Docker Desktop or confirm the engine is running)
 
-    Step 3: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
+    Step 3: Create a '.env' file in the 'airflow' directory. (This can be used for connecting external databases or services to airflow)
+
+    Step 4: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
     
-    Step 4: Once Apache Airflow is up, first complete the steps specified in the Setting_Up_Slack_Connection_Airflow.pdf
+    Step 5: Once Apache Airflow is up, first complete the steps specified in the Setting_Up_Slack_Connection_Airflow.pdf
 
-    Step 5: If you are interested in the Pitch By Pitch Data unpause the 'baseball-savant-etl' dag. This should start the DAG since it is a scheduled DAG. This should run and populate the Data Warehouse tables for the DIM and FACT tables in the sql_scripts/schema.sql file.
+    Step 6: If you are interested in the Pitch By Pitch Data unpause the 'baseball-savant-etl' dag. This should start the DAG since it is a scheduled DAG. This should run and populate the Data Warehouse tables for the DIM and FACT tables in the sql_scripts/schema.sql file.
 
-    Step 6: If you are interested in the Game Prediction Model run the 'load_mlb_game_prediction'
+    Step 7: If you are interested in the Game Prediction Model run the 'load_mlb_game_prediction'
     DAG to populate the baseball_stats table and deploy an ML model for predicting wins (DAG still in progress 🚧)
 
 ### Commands
