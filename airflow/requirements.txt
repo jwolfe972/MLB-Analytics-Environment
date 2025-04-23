@@ -12,6 +12,6 @@ statistics
 mlflow
 seaborn
 airflow-provider-mlflow
-apache-airflow-providers-common-compat==1.2.2
+apache-airflow-providers-common-compat
 apache-airflow-providers-slack
 unidecode

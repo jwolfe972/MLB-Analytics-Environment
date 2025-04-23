@@ -45,7 +45,7 @@ AWS RDS PostgreSQL database. For the variables below, you would need to setup so
 """
 import time
 from datetime import datetime, timedelta
-from airflow.models.dag import DAG
+from airflow.sdk import DAG
 from airflow.utils.task_group import TaskGroup
 from airflow.hooks.base import BaseHook
 import pandas as pd
@@ -56,7 +56,7 @@ from pybaseball import statcast
 from pybaseball import cache
 import os
 import psycopg2
-from airflow.operators.python_operator import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 import numpy as np
 import pendulum
 from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
@@ -1168,7 +1168,7 @@ def load_tables_many_on_conflict(df: pd.DataFrame, table_name, secret):
 ########################################################################################################################
 
 # The Dag Process that Runs in Airflow
-with DAG(dag_id='baseball-savant-etl-workflow-aws-rds', schedule_interval="30 9 * * *", default_args=default_args,
+with DAG(dag_id='baseball-savant-etl-workflow-aws-rds', schedule="30 9 * * *", default_args=default_args,
          catchup=False) as dag:
     slack_success = SlackWebhookOperator(
         task_id='slack_success',

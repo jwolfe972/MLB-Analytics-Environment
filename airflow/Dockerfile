@@ -1,5 +1,4 @@
-FROM apache/airflow:2.10.5
-
+FROM apache/airflow:3.0.0
 
 #https://robust-dinosaur-2ef.notion.site/How-to-run-PySpark-with-Apache-Airflow-PUBLIC-1449e45d4dbe8077828be971b0078495
 # Switch to root to install system dependencies

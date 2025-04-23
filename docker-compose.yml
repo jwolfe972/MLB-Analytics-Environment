@@ -1,22 +1,23 @@
 x-airflow-common:
   &airflow-common
-  # In order to add custom dependencies or upgrade provider packages you can use your extended image.
+  # In order to add custom dependencies or upgrade provider distributions you can use your extended image.
   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  #image: apache/airflow:latest
   build:
     context: ./airflow
     dockerfile: Dockerfile
+  # build: .
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@postgres/MLB_DATA
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://user:password@postgres/MLB_DATA
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8081/execution/'
     # yamllint disable rule:line-length
     # Use simple http server on scheduler for health checks
     # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
@@ -28,16 +29,14 @@ x-airflow-common:
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
-  env_file:
-    - ./airflow/.env
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/config:/opt/airflow/config
     - ./airflow/plugins:/opt/airflow/plugins
-    - ./data:/opt/airflow/data
-    - ./sql_scripts:/opt/airflow/sql_files
   user: "${AIRFLOW_UID:-50000}:0"
+  env_file:
+  - ./airflow/.env
   depends_on:
     &airflow-common-depends-on
     redis:
@@ -58,12 +57,33 @@ services:
       - "8051:8051"
     depends_on:
       - postgres
-      - airflow-webserver
+      - airflow-apiserver
       - airflow-scheduler
     networks:
       - my_network
     volumes:
       - ./team_logos:/home/mlb_images/team_logos
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server -p 8081
+    container_name: airflow-apiserver
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8081/api/v2/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - my_network
+
+
   
   mlflow:
     build:
@@ -153,25 +173,6 @@ services:
     depends_on:
       - postgres
 
-#  superset:
-#    build:
-#      context: ./superset
-#      dockerfile: Dockerfile
-#    container_name: superset
-#    environment:
-#      - ADMIN_USERNAME=admin
-#      - ADMIN_EMAIL=admin@superset.com
-#      - ADMIN_PASSWORD=admin
-#    ports:
-#      - '8088:8088'
-#    volumes:
-#      - superset:/app/superset_home
-#    networks:
-#      - my_network
-
-
-
-
 
 
   redis:
@@ -188,26 +189,6 @@ services:
       start_period: 30s
     restart: always
     container_name: redis
-    networks:
-      - my_network   
-
-  airflow-webserver:
-    <<: *airflow-common
-    command: webserver -p 8081
-    container_name: airflow-webserver
-    ports:
-      - "8081:8081"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    restart: always
-    depends_on:
-      <<: *airflow-common-depends-on
-      airflow-init:
-        condition: service_completed_successfully
     networks:
       - my_network   
 
@@ -228,7 +209,24 @@ services:
         condition: service_completed_successfully
     networks:
       - my_network   
-  
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    container_name: airflow-dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - my_network
+    
   airflow-worker:
     <<: *airflow-common
     command: celery worker
@@ -250,6 +248,8 @@ services:
     restart: always
     depends_on:
       <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     networks:
@@ -321,17 +321,8 @@ services:
           echo "   https://airflow.apache.org/docs/apache-airflow/stable/howto/docker-compose/index.html#before-you-begin"
           echo
         fi
-        echo "Almost Done!!!!"
-        echo "Adding Airflow Connection for MLFlow"
-        airflow db init
-        airflow connections add 'mlflow_default' --conn-type 'http' --conn-host 'http://mlflow' --conn-port '5000'
-        airflow connections add 'pyspark-conn' --conn-type 'spark' --conn-host 'spark://spark-master' --conn-port '7077' --conn-extra '{"deploy_mode": "client", "spark_binary": "spark-submit"}'
-        
         exec /entrypoint airflow version
-
-
     # yamllint enable rule:line-length
-
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -343,7 +334,7 @@ services:
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
     networks:
-      - my_network   
+      - my_network
 
 
 
