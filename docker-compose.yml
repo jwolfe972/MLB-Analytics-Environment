@@ -116,19 +116,19 @@ services:
     networks:
       - my_network
     
-  # grafana-mlb:
-  #   image: grafana/grafana:11.6.0
-  #   container_name: grafana-mlb
-  #   restart: always
-  #   ports:
-  #     - "4000:3000"
-  #   environment:
-  #     - GF_SECURITY_ADMIN_USER=admin
-  #     - GF_SECURITY_ADMIN_PASSWORD=admin
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #   networks:
-  #     - my_network
+  grafana-mlb:
+    image: grafana/grafana:11.6.0
+    container_name: grafana-mlb
+    restart: always
+    ports:
+      - "7777:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - my_network
 
   metabase:
     image: metabase/metabase:v0.46.8
@@ -152,26 +152,6 @@ services:
       - my_network
     depends_on:
       - postgres
-
-#  superset:
-#    build:
-#      context: ./superset
-#      dockerfile: Dockerfile
-#    container_name: superset
-#    environment:
-#      - ADMIN_USERNAME=admin
-#      - ADMIN_EMAIL=admin@superset.com
-#      - ADMIN_PASSWORD=admin
-#    ports:
-#      - '8088:8088'
-#    volumes:
-#      - superset:/app/superset_home
-#    networks:
-#      - my_network
-
-
-
-
 
 
   redis:
@@ -388,6 +368,7 @@ services:
 volumes:
   pgdata:
   metabase-data:
+  grafana_data:
 
 networks:
   my_network:
