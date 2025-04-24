@@ -97,6 +97,8 @@
 ```localhost:4000 -> Metabase ```
 <br>
 ```localhost:8888 -> Jupyter Notebook Server ```
+<br>
+```localhost:7777 -> Grafana ```
 
 
 ### Note: For Freshly restarting the Containers and Volumes run this command:
@@ -106,6 +108,8 @@ Def recommend running this after I push new changes as I continue
 until this project is in a stable state. Dont also forget to recreate the Slack Connection to Airflow upon freshly restarting the containers and volumes
 
 Also for the baseball savant ETL Dag that is scheduled so to start the job just unpause the DAG
+
+** Update, I found dumping to csv and doing a copy expert speeds up the data load by alot I have applied this to the AWS rds version of the DAG because I will be using that DB going forward but not yet the regular version I will reqrite that one soon**
 
 
 
