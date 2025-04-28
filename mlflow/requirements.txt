@@ -1,2 +1,2 @@
 mlflow==2.5.0
-pydantic==1.10.9
+pydantic==1.10.13
