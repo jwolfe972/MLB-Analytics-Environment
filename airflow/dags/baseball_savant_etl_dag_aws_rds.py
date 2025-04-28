@@ -83,9 +83,9 @@ DB_NAME= os.getenv("DB_NAME")
 DB_PORT= os.getenv("DB_PORT")
 
 START_DATE = '2025-01-01'
-#END_DATE = '2020-12-31'
-
+#END_DATE = '2016-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
+
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
 end_date_dt = datetime.strptime(END_DATE, '%Y-%m-%d')
 END_YEAR = end_date_dt.year

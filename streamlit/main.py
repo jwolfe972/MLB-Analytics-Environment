@@ -6,8 +6,21 @@ import statsapi as mlb_stats
 import datetime
 from streamlit_card import card
 import os
-
+import boto3
+from botocore.exceptions import ClientError
 import base64
+import json
+import psycopg2
+
+
+BUCKET = os.getenv("BUCKET")
+ACCESS_KEY = os.getenv("ACCESS_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY")
+REGION = os.getenv("REGION")
+SECRET_NAME = os.getenv("SECRET_NAME")
+DB_HOST=os.getenv("DB_HOST")
+DB_NAME= os.getenv("DB_NAME")
+DB_PORT= os.getenv("DB_PORT")
 
 
 
@@ -68,13 +81,68 @@ def load_schedule(date_filter):
     #         title=f'{row["home_name"]} vs {row["away_name"]}',
     #         text=f'{row["home_score"]}-{row["away_score"]}'
     #     )
-
-
-
+    
+    game_predictions = load_all_game_predictions(get_secret())
+    
+    merged_df = df.merge(game_predictions, how='left', left_on='game_id', right_on='game_pk')
 
     
+    print(merged_df)
 
-    return df[['game_id', 'game_date', 'status', 'home_name', 'away_name', 'home_score', 'away_score', 'venue_name' ]]
+
+
+    return merged_df[['game_id', 'game_date', 'status', 'home_name', 'away_name', 'home_score', 'away_score', 'venue_name', 'team_winner_abbrev' ]]
+
+
+
+def get_secret():
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=REGION,
+        aws_access_key_id=ACCESS_KEY,
+        aws_secret_access_key=SECRET_KEY,
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=SECRET_NAME
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    secret = get_secret_value_response['SecretString']
+
+    dic = json.loads(secret)
+
+    return dic
+
+
+
+def load_all_game_predictions(secret):
+    try:
+        # Define connection parameters
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=secret['username'],
+            password=secret['password'],
+            host=DB_HOST,
+            port=DB_PORT
+        )
+
+        sql = "SELECT * from game_predictions;"
+        game_preds = pd.read_sql(sql, conn)
+
+        print("Game Preds Loaded")
+        return game_preds  # Return the connection object if successful
+
+    except psycopg2.Error as e:
+        print("Error w/ PostgreSQL:", e)
+        raise  # raise error for error
 
 
 
@@ -148,7 +216,7 @@ def load_card_information(df):
                      with st.container():  # Ensures full display within column
                         card(
                     title=f'{row["home_name"]} vs {row["away_name"]}',
-                    text=f'{row["home_score"]}-{row["away_score"]} {row["status"]}\nPredicted Winner: redacted',
+                    text=f'{row["home_score"]}-{row["away_score"]} {row["status"]}\nPredicted Winner: {str(row["team_winner_abbrev"]).upper()}',
                     image=data
 
                         )
@@ -156,11 +224,6 @@ def load_card_information(df):
                         df_boxscore_home, df_boxscore_away = parse_box_score_json(box_score)
                         st.write(df_boxscore_home)
                         st.write(df_boxscore_away)
-
-
-
-def update_win_model():
-    pass
 
 
 
@@ -172,10 +235,10 @@ selected_date = st.date_input("Select a date", value=datetime.datetime.today())
 
 
 
-chart_data = pd.DataFrame(np.random.randn(20), columns=["a"])
+# chart_data = pd.DataFrame(np.random.randn(20), columns=["a"])
 
 st.subheader('Prediction Accuracy over time')
-st.line_chart(chart_data)
+# st.line_chart(chart_data)
 
 st.subheader(f'Todays Date For Game Predictions: {datetime.datetime.today().strftime("%m/%d/%Y")}')
 

@@ -7,10 +7,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Expose port 5000
 EXPOSE 5000
 
-ENV MLFLOW_TRACKING_URI=http://localhost:5000
 
 
 # Run the Streamlit app
-CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["mlflow", "server", \
+     "--backend-store-uri", "sqlite:///mlflow.db", \
+     "--default-artifact-root", "s3://mlflow-mlb-prediction/", \
+     "--host", "0.0.0.0", \
+     "--port", "5000"]
 
 

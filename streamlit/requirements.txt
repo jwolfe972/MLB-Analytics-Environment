@@ -8,3 +8,5 @@ apache-airflow
 SQLAlchemy
 pyodbc
 seaborn
+boto3
+psycopg2

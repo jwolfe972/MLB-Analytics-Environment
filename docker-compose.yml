@@ -58,10 +58,10 @@ services:
       - "8051:8051"
     depends_on:
       - postgres
-      - airflow-webserver
-      - airflow-scheduler
     networks:
       - my_network
+    env_file:
+      - ./streamlit/.env
     volumes:
       - ./team_logos:/home/mlb_images/team_logos
   
@@ -78,6 +78,8 @@ services:
     restart: always
     networks:
       - my_network
+    env_file:
+      - ./mlflow/.env
     volumes:
       - ./mlflow/mlartifacts:/mlartifacts
       - ./mlflow/mlruns:/mlruns
