@@ -1322,14 +1322,14 @@ def prediction(data, model_uri, model_uri_run):
         region_name=REGION # optional but good to set
     )
     bucket_name = 'mlflow-mlb-prediction'
-    s3_path = f'1/{id_only}/artifacts/win_model/model.pkl'
+    s3_path = f'3/{id_only}/artifacts/win_model/model.pkl'
     
     obj = s3.get_object(Bucket=bucket_name, Key=s3_path)
     model = obj['Body'].read()  # bytes
     
     id_only_run =  model_uri_run.split('/')[1]
     
-    s3_path_run = f'1/{id_only_run}/artifacts/run_model/model.pkl'
+    s3_path_run = f'3/{id_only_run}/artifacts/run_model/model.pkl'
     obj = s3.get_object(Bucket=bucket_name, Key=s3_path_run)
     model_run = obj['Body'].read()  # bytes
 

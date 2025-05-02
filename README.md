@@ -1,4 +1,4 @@
-# MLB Game Prediction Model Project CSCE 5214 ⚠️**Work-In-Progress**⚠️
+# MLB Game Prediction Model Project CSCE 5214 
 
 ## Author: Jordan D. Wolfe [jwolfe972@gmail.com](mailto:jwolfe972@gmail.com)
 
@@ -29,7 +29,7 @@
 <br> 
 
 ## Why Should You Use This Program?
-    1. This program provides a Game Prediction Model Fully Automated (WIP 🚧)
+    1. This program provides a Game Prediction Model Fully Automated
     2. This program provides a fully automated Baseball Savant Pitch-By-Pitch ETL Process into a Postgres Datawarehouse for easy querying
     3. This program provides custom ML model creation and usage from the MLB Data
     4. This program provides an underlying open-source dashboard tool to build custom visualizations from the data
@@ -147,5 +147,5 @@ Also for the baseball savant ETL Dag that is scheduled so to start the job just 
 
 ## **Phase 3:** Extending the Architecture of an existing ML-based system *(Due 04/20/2025)* ✅
 
-## **Phase 4:** Develop a User Interface *(Due 05/04/2025)* 🚧
+## **Phase 4:** Develop a User Interface *(Due 05/04/2025)* ✅
 
