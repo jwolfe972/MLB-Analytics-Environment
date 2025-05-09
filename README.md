@@ -70,7 +70,7 @@
 
     Step 2: Make Sure the Docker Engine is running (Open Docker Desktop or confirm the engine is running)
 
-    Step 3: Create a '.env' file in the 'airflow' directory. (This can be used for connecting external databases or services to airflow)
+    Step 3: Create a '.env' file in the 'airflow', mlflow, and streamlit dirs. (This can be used for connecting external databases or services to airflow)
 
     Step 4: Run the command: docker-compose up -d  or docker-compose up -d --build for a rebuild<- This command builds the compose stacks. It takes a while to initially start.
     
