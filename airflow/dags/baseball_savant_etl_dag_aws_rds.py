@@ -41,6 +41,9 @@ AWS RDS PostgreSQL database. For the variables below, you would need to setup so
 - 2025-04-22
     Added retries on the fangraph scrape methods
 
+- 2025-05-30
+    Changed named of environment variables to have aws prefix
+
 
 """
 import time
@@ -73,14 +76,14 @@ cache.disable()
 # VARIABLES
 ########################################################################################################################
 
-BUCKET = os.getenv("BUCKET")
-ACCESS_KEY = os.getenv("ACCESS_KEY")
-SECRET_KEY = os.getenv("SECRET_KEY")
-REGION = os.getenv("REGION")
-SECRET_NAME = os.getenv("SECRET_NAME")
-DB_HOST=os.getenv("DB_HOST")
-DB_NAME= os.getenv("DB_NAME")
-DB_PORT= os.getenv("DB_PORT")
+BUCKET = os.getenv("AWS_BUCKET")
+ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+REGION = os.getenv("AWS_REGION")
+SECRET_NAME = os.getenv("AWS_SECRET_NAME")
+DB_HOST=os.getenv("AWS_DB_HOST")
+DB_NAME= os.getenv("AWS_DB_NAME")
+DB_PORT= os.getenv("AWS_DB_PORT")
 
 START_DATE = '2025-01-01'
 #END_DATE = '2016-12-31'

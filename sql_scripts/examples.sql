@@ -131,3 +131,72 @@ LEFT JOIN HITTER_INFO_DIM hit on hit.HITTER_ID = cycle.BATTER_ID
 LEFT JOIN GAME_INFO_DIM game on game.GAME_PK = cycle.GAME_ID
 WHERE num_singles > 0 AND num_doubles > 0 AND num_triples > 0 AND num_HRs > 0
 ORDER BY game.game_year DESC
+
+
+
+
+
+
+
+with players_hits_in_games as (
+
+SELECT pitch.batter_id, pitch.game_id, SUM(CASE WHEN play.events IN ('home_run', 'triple', 'double', 'single') THEN 1 ELSE 0 END) as number_of_hits
+FROM pitch_info_fact pitch
+LEFT JOIN play_info_dim play ON pitch.play_id = play.play_id
+GROUP BY pitch.batter_id, pitch.game_id
+),
+players_hits_and_last_game as (
+
+SELECT players.batter_id, players.game_id, players.number_of_hits,
+LAG(players.number_of_hits) OVER(PARTITION BY players.batter_id ORDER BY game.game_date ASC) AS previous_game_hits,
+GAME.GAME_DATE
+FROM players_hits_in_games players
+LEFT JOIN game_info_dim game on game.game_pk = players.game_id
+WHERE game.game_year = 2025
+),
+
+streak_identifier AS (
+    SELECT batter_id, game_id, number_of_hits, previous_game_hits, game_date,
+    CASE
+        WHEN previous_game_hits > 0 THEN 1
+        ELSE 0
+    END AS hit_in_game_before,
+	CASE
+		WHEN number_of_hits > 0 THEN 1
+		ELSE 0
+	END AS hit_in_game
+    FROM players_hits_and_last_game
+),
+streak_change as (
+
+   SELECT batter_id, game_id, number_of_hits, previous_game_hits, game_date,hit_in_game_before, hit_in_game,
+   CASE
+   		WHEN hit_in_game_before != hit_in_game
+		   	THEN 1
+		ELSE 0
+	END AS streak_change
+	FROM streak_identifier
+
+),
+streak_positioner as (
+
+ SELECT batter_id, game_id, number_of_hits, previous_game_hits, game_date,hit_in_game_before, hit_in_game,
+ streak_change,
+ SUM(streak_change) OVER(PARTITION BY batter_id ORDER BY game_date ASC) as streak_position_number
+ FROM streak_change
+
+
+),
+hit_streak as (
+ SELECT batter_id, game_id, number_of_hits, previous_game_hits, game_date,hit_in_game_before, hit_in_game,
+ streak_change, streak_position_number, ROW_NUMBER() OVER(PARTITION BY batter_id,streak_position_number ) as max_hit_streak
+	FROM streak_positioner
+)
+
+
+SELECT batter_id, hitters.hitter_name, MAX(max_hit_streak) as best_hit_streak
+FROM hit_streak
+LEFT JOIN hitter_info_dim hitters on hitters.hitter_id = hit_streak.batter_id
+GROUP BY batter_id, hitters.hitter_name
+ORDER BY MAX(max_hit_streak) DESC;
+
