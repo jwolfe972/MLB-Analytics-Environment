@@ -1,0 +1,26 @@
+# Ignore Airflow logs and cache
+logs/
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environments
+venv/
+.env/
+
+# Ignore local config and temporary files
+*.log
+*.swp
+.DS_Store
+*.bak
+*.tmp
+
+# Ignore data or scripts not needed during image build
+data/
+sql_scripts/
+
+# If dags/plugins aren't needed in the build context (they’re mounted at runtime)
+dags/
+plugins/
+config/
+logs/

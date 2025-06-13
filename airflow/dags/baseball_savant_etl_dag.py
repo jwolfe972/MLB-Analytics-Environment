@@ -34,6 +34,14 @@ I added a commit for each loop so mitigate this issue (In the load table many co
     
 - 2025-04-22
     Added retries on the fangraph scrape methods
+    
+    
+- 2025-06-13
+    Large Overhaul, this update will reduce load time of the progress by 10s of minutes for an entire season. This will use a merge
+    method of inserting the data insteas of loading all the data and transforming on what is already in the DB.
+    This, atleast on my PC reduced the load time for an entire season (Post season included) from around
+    25-30 minutes to around 10 minutes! Most of the process will be spent extracting the data from pybaseball and the 
+    fangraphs API and mostly blaze through the loading pieces.
 
 
 """
@@ -58,13 +66,15 @@ import pytz
 from unidecode import unidecode
 import requests
 from bs4 import BeautifulSoup
+import re
+from io import StringIO
 
 cache.disable()
 ########################################################################################################################
  # VARIABLES
 ########################################################################################################################
 START_DATE = '2025-01-01'
-#END_DATE = '2024-12-31'
+#END_DATE = '2023-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -75,80 +85,287 @@ END_YEAR = end_date_dt.year
 
 START_YEAR = start_date_dt.year
 
-TABLE_TABLE_COLUMN_INSERT_DICT = {
 
+TABLE_TABLE_COLUMN_INSERT_DICT = {
     'HITTER_INFO_DIM': {
         'columns': '(HITTER_ID, HITTER_NAME)',
-        'values': '(%s,%s)'
-
+        'values': '(%s,%s)',
+        'conflict': '(HITTER_ID)',
+        'conflict_updates': ['HITTER_NAME'],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_HITTER_INFO_DIM(
+                HITTER_ID INT PRIMARY KEY,
+                HITTER_NAME VARCHAR(100) NOT NULL,
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
     },
     'PITCHER_INFO_DIM': {
         'columns': '(PITCHER_ID, PITCHER_NAME)',
-        'values': '(%s,%s)'
+        'values': '(%s,%s)',
+        'conflict': '(PITCHER_ID)',
+        'conflict_updates': ['PITCHER_NAME'],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_PITCHER_INFO_DIM(
+                PITCHER_ID INT PRIMARY KEY,
+                PITCHER_NAME VARCHAR(100) NOT NULL,
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
     },
     'GAME_INFO_DIM': {
         'columns': '(GAME_PK, GAME_DATE, GAME_TYPE, HOME_TEAM, AWAY_TEAM, GAME_YEAR)',
-        'values': '(%s, %s, %s, %s, %s, %s)'
+        'values': '(%s, %s, %s, %s, %s, %s)',
+        'conflict': '(GAME_PK)',
+        'conflict_updates': ['GAME_DATE', 'GAME_TYPE', 'HOME_TEAM', 'AWAY_TEAM', 'GAME_YEAR'],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_GAME_INFO_DIM(
+                GAME_PK INT PRIMARY KEY,
+                GAME_DATE DATE NOT NULL,
+                GAME_TYPE CHAR(1) NOT NULL,
+                HOME_TEAM VARCHAR(10) NOT NULL,
+                AWAY_TEAM VARCHAR(10) NOT NULL,
+                GAME_YEAR INT NOT NULL,
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
     },
-'PITCH_INFO_FACT': {
-    'columns': '''(
-        PITCH_ID, PITCHER_ID, BATTER_ID, HIT_ID, GAME_ID, PLAY_ID, COUNT, BASES, BASES_AFTER, RS_ON_PLAY, PITCH_TYPE, DESCRIPTION, RELEASE_SPEED, RELEASE_POS_X, RELEASE_POS_Z, ZONE, TYPE,
-        PFX_X, PFX_Z, PLATE_X, PLATE_Z, VELOCITY_PITCH_FPS_X, VELOCITY_PITCH_FPS_Y, VELOCITY_PITCH_FPS_Z,
-        ACCEL_PITCH_FPS_X, ACCEL_PITCH_FPS_Y, ACCEL_PITCH_FPS_Z, TOP_OF_ZONE, BOTTOM_OF_ZONE,
-        RELEASE_SPIN_RATE, RELEASE_EXTENSION, RELEASE_POS_Y, PITCH_NAME, EFFECTIVE_SPEED,
-        SPIN_AXIS, PITCH_NUMBER_AB, PITCHER_TEAM, HITTER_TEAM, HITTER_STAND, PITCHER_THROW
-    )''',
-    'values': '''(
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )'''
-},
-'HIT_INFO_DIM': {
+    'HIT_INFO_DIM': {
+        'columns': '(HIT_ID, HIT_LOCATION , BB_TYPE, HC_X, HC_Y, HIT_DISTANCE, LAUNCH_SPEED, LAUNCH_ANGLE, LAUNCH_SPEED_ANGLE, ESTIMATED_BA_SPEED_ANGLE, ESTIMATED_WOBA_SPEED_ANGLE)',
+        'values': '(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+        'conflict': '(HIT_ID)',
+        'conflict_updates': ['HIT_LOCATION', 'BB_TYPE', 'HC_X', 'HC_Y', 'HIT_DISTANCE', 'LAUNCH_SPEED', 'LAUNCH_ANGLE', 'LAUNCH_SPEED_ANGLE', 'ESTIMATED_BA_SPEED_ANGLE', 'ESTIMATED_WOBA_SPEED_ANGLE'],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_HIT_INFO_DIM(
+                HIT_ID VARCHAR(100) PRIMARY KEY,
+                HIT_LOCATION INT,
+                BB_TYPE VARCHAR(20),
+                HC_X NUMERIC(5,2),
+                HC_Y NUMERIC(5,2),
+                HIT_DISTANCE INT,
+                LAUNCH_SPEED NUMERIC(5,2),
+                LAUNCH_ANGLE INT,
+                LAUNCH_SPEED_ANGLE INT,
+                ESTIMATED_BA_SPEED_ANGLE NUMERIC(4,3),
+                ESTIMATED_WOBA_SPEED_ANGLE NUMERIC(4,3),
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+    },
+    'PLAY_INFO_DIM': {
+        'columns': '''(
+            PLAY_ID, EVENTS, DES, ON_3B, ON_2B, ON_1B, OUTS_WHEN_UP, INNING, INNING_TOPBOT,
+            FIELDER_2, FIELDER_3, FIELDER_4, FIELDER_5, FIELDER_6, FIELDER_7, FIELDER_8, FIELDER_9,
+            WOBA_VALUE, WOBA_DENOM, BABIP_VALUE, ISO_VALUE, AT_BAT_NUMBER, HOME_SCORE, AWAY_SCORE,
+            BAT_SCORE, FLD_SCORE, POST_HOME_SCORE, POST_AWAY_SCORE, POST_BAT_SCORE,
+            IF_ALIGNMENT, OF_ALIGNMENT, DELTA_HOME_WIN_EXP, DELTA_RUN_EXP
+        )''',
+        'values': '''(
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )''',
+        'conflict': '(PLAY_ID)',
+        'conflict_updates': ['EVENTS', 'DES', 'ON_3B', 'ON_2B', 'ON_1B', 'OUTS_WHEN_UP', 'INNING', 'INNING_TOPBOT',
+                             'FIELDER_2', 'FIELDER_3', 'FIELDER_4', 'FIELDER_5', 'FIELDER_6', 'FIELDER_7', 'FIELDER_8', 'FIELDER_9',
+                             'WOBA_VALUE', 'WOBA_DENOM', 'BABIP_VALUE', 'ISO_VALUE', 'AT_BAT_NUMBER', 'HOME_SCORE', 'AWAY_SCORE',
+                             'BAT_SCORE', 'FLD_SCORE', 'POST_HOME_SCORE', 'POST_AWAY_SCORE', 'POST_BAT_SCORE',
+                             'IF_ALIGNMENT', 'OF_ALIGNMENT', 'DELTA_HOME_WIN_EXP', 'DELTA_RUN_EXP'],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_PLAY_INFO_DIM(
+                PLAY_ID VARCHAR(200) PRIMARY KEY,
+                EVENTS TEXT NOT NULL,
+                DES TEXT,
+                ON_3B INT,
+                ON_2B INT,
+                ON_1B INT,
+                OUTS_WHEN_UP INT NOT NULL,
+                INNING INT NOT NULL,
+                INNING_TOPBOT CHAR(3) NOT NULL,
+                FIELDER_2 INT NOT NULL,
+                FIELDER_3 INT NOT NULL,
+                FIELDER_4 INT NOT NULL,
+                FIELDER_5 INT NOT NULL,
+                FIELDER_6 INT NOT NULL,
+                FIELDER_7 INT NOT NULL,
+                FIELDER_8 INT NOT NULL,
+                FIELDER_9 INT NOT NULL,
+                WOBA_VALUE NUMERIC(4,3),
+                WOBA_DENOM NUMERIC(4,3),
+                BABIP_VALUE SMALLINT,
+                ISO_VALUE SMALLINT,
+                AT_BAT_NUMBER SMALLINT NOT NULL,
+                HOME_SCORE SMALLINT NOT NULL,
+                AWAY_SCORE SMALLINT NOT NULL,
+                BAT_SCORE SMALLINT NOT NULL,
+                FLD_SCORE SMALLINT NOT NULL,
+                POST_HOME_SCORE SMALLINT NOT NULL,
+                POST_AWAY_SCORE SMALLINT NOT NULL,
+                POST_BAT_SCORE SMALLINT NOT NULL,
+                IF_ALIGNMENT VARCHAR(100),
+                OF_ALIGNMENT VARCHAR(100),
+                DELTA_HOME_WIN_EXP NUMERIC(6,3),
+                DELTA_RUN_EXP NUMERIC(6,3),
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+    },
+    'PITCH_INFO_FACT': {
+        'columns': '''(
+            PITCH_ID, PITCHER_ID, BATTER_ID, HIT_ID, GAME_ID, PLAY_ID, COUNT, BASES, BASES_AFTER, RS_ON_PLAY, PITCH_TYPE, DESCRIPTION, RELEASE_SPEED, RELEASE_POS_X, RELEASE_POS_Z, ZONE, TYPE,
+            PFX_X, PFX_Z, PLATE_X, PLATE_Z, VELOCITY_PITCH_FPS_X, VELOCITY_PITCH_FPS_Y, VELOCITY_PITCH_FPS_Z,
+            ACCEL_PITCH_FPS_X, ACCEL_PITCH_FPS_Y, ACCEL_PITCH_FPS_Z, TOP_OF_ZONE, BOTTOM_OF_ZONE,
+            RELEASE_SPIN_RATE, RELEASE_EXTENSION, RELEASE_POS_Y, PITCH_NAME, EFFECTIVE_SPEED,
+            SPIN_AXIS, PITCH_NUMBER_AB, PITCHER_TEAM, HITTER_TEAM, HITTER_STAND, PITCHER_THROW
+        )''',
+        'values': '''(
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )''',
+        'conflict': '(PITCH_ID)',
+        'conflict_updates': [  # all except the primary key
+            'PITCHER_ID', 'BATTER_ID', 'HIT_ID', 'GAME_ID', 'PLAY_ID', 'COUNT', 'BASES', 'BASES_AFTER', 'RS_ON_PLAY', 'PITCH_TYPE',
+            'DESCRIPTION', 'RELEASE_SPEED', 'RELEASE_POS_X', 'RELEASE_POS_Z', 'ZONE', 'TYPE', 'PFX_X', 'PFX_Z', 'PLATE_X', 'PLATE_Z',
+            'VELOCITY_PITCH_FPS_X', 'VELOCITY_PITCH_FPS_Y', 'VELOCITY_PITCH_FPS_Z', 'ACCEL_PITCH_FPS_X', 'ACCEL_PITCH_FPS_Y',
+            'ACCEL_PITCH_FPS_Z', 'TOP_OF_ZONE', 'BOTTOM_OF_ZONE', 'RELEASE_SPIN_RATE', 'RELEASE_EXTENSION', 'RELEASE_POS_Y',
+            'PITCH_NAME', 'EFFECTIVE_SPEED', 'SPIN_AXIS', 'PITCH_NUMBER_AB', 'PITCHER_TEAM', 'HITTER_TEAM', 'HITTER_STAND', 'PITCHER_THROW'
+        ],
+        'temp_table': """
+            CREATE TABLE IF NOT EXISTS TEMP_PITCH_INFO_FACT(
+                PITCH_ID VARCHAR(200) PRIMARY KEY,
+                PITCHER_ID INT NOT NULL,
+                BATTER_ID INT NOT NULL,
+                HIT_ID VARCHAR(100),
+                GAME_ID INT NOT NULL,
+                PLAY_ID VARCHAR(200),
+                COUNT VARCHAR(6) NOT NULL,
+                BASES VARCHAR(8) NOT NULL,
+                BASES_AFTER VARCHAR(8),
+                RS_ON_PLAY SMALLINT NOT NULL,
+                PITCH_TYPE VARCHAR(25),
+                DESCRIPTION VARCHAR(200),
+                RELEASE_SPEED NUMERIC(5,2),
+                RELEASE_POS_X NUMERIC(4,2),
+                RELEASE_POS_Z NUMERIC(4,2),
+                ZONE SMALLINT,
+                TYPE CHAR(1),
+                PFX_X NUMERIC(4,2),
+                PFX_Z NUMERIC(4,2),
+                PLATE_X NUMERIC(4,2),
+                PLATE_Z NUMERIC(4,2),
+                VELOCITY_PITCH_FPS_X NUMERIC(5,2),
+                VELOCITY_PITCH_FPS_Y NUMERIC(5,2),
+                VELOCITY_PITCH_FPS_Z NUMERIC(5,2),
+                ACCEL_PITCH_FPS_X NUMERIC(5,2),
+                ACCEL_PITCH_FPS_Y NUMERIC(5,2),
+                ACCEL_PITCH_FPS_Z NUMERIC(5,2),
+                TOP_OF_ZONE NUMERIC(4,2),
+                BOTTOM_OF_ZONE NUMERIC(4,2),
+                RELEASE_SPIN_RATE INT,
+                RELEASE_EXTENSION NUMERIC(4,2),
+                RELEASE_POS_Y NUMERIC(4,2),
+                PITCH_NAME VARCHAR(50),
+                EFFECTIVE_SPEED NUMERIC(5,2),
+                SPIN_AXIS INT,
+                PITCH_NUMBER_AB INT NOT NULL,
+                PITCHER_TEAM VARCHAR(25) NOT NULL,
+                HITTER_TEAM VARCHAR(10) NOT NULL,
+                HITTER_STAND CHAR(1) NOT NULL,
+                PITCHER_THROW CHAR(1) NOT NULL,
+                DATE_TIME_CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+        """
+    },
+     'BATTER_EXTRA_STATS': {
 
-    'columns': '(HIT_ID, HIT_LOCATION , BB_TYPE, HC_X, HC_Y, HIT_DISTANCE, LAUNCH_SPEED, LAUNCH_ANGLE, LAUNCH_SPEED_ANGLE, ESTIMATED_BA_SPEED_ANGLE, ESTIMATED_WOBA_SPEED_ANGLE)',
-    'values': '(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)'
-},
+        'columns': '(HITTER_ID, GAME_DATE, IBB, RBIS, RUNS, SB, WAR)',
+        'values': '(%s, %s, %s, %s, %s, %s, %s)',
+        'conflict': '(HITTER_ID, GAME_DATE)',
+        'conflict_updates': ['IBB', 'RBIS', 'RUNS', 'SB', 'WAR'],
+        'temp_table': """
+        
+        CREATE TABLE IF NOT EXISTS TEMP_BATTER_EXTRA_STATS(
+    HITTER_ID INT NOT NULL,
+    GAME_DATE DATE NOT NULL,
+    IBB INT NOT NULL,
+    RBIS INT NOT NULL,
+    RUNS INT NOT NULL,
+    SB INT NOT NULL,
+    WAR NUMERIC(5,2),
+    LAST_UPDATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(HITTER_ID, GAME_DATE),
+    FOREIGN KEY (HITTER_ID) REFERENCES HITTER_INFO_DIM(HITTER_ID)
+);
+        
+        
+        """,
 
-'PLAY_INFO_DIM': {
-    'columns': '''(
-        PLAY_ID, EVENTS, DES, ON_3B, ON_2B, ON_1B, OUTS_WHEN_UP, INNING, INNING_TOPBOT,
-        FIELDER_2, FIELDER_3, FIELDER_4, FIELDER_5, FIELDER_6, FIELDER_7, FIELDER_8, FIELDER_9,
-        WOBA_VALUE, WOBA_DENOM, BABIP_VALUE, ISO_VALUE, AT_BAT_NUMBER, HOME_SCORE, AWAY_SCORE,
-        BAT_SCORE, FLD_SCORE, POST_HOME_SCORE, POST_AWAY_SCORE, POST_BAT_SCORE,
-        IF_ALIGNMENT, OF_ALIGNMENT, DELTA_HOME_WIN_EXP, DELTA_RUN_EXP
-    )''',
-    'values': '''(
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )'''
-},
+    },
+
+    'PITCHER_EXTRA_STATS': {
+
+        'columns': '(PITCHER_ID, GAME_DATE, WINS, LOSSES, IP, ER, SO, BB, HBP, IBB, SV, WAR)',
+        'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+        'conflict': '(PITCHER_ID, GAME_DATE)',
+        'conflict_updates': ['WINS', 'LOSSES', 'IP', 'ER', 'SO', 'BB', 'HBP', 'IBB', 'SV', 'WAR'],
+        'temp_table': """
+        
+        CREATE TABLE IF NOT EXISTS TEMP_PITCHER_EXTRA_STATS(
+
+    PITCHER_ID INT NOT NULL,
+    GAME_DATE DATE NOT NULL,
+    WINS INT NOT NULL,
+    LOSSES INT NOT NULL,
+    IP NUMERIC(5,2) NOT NULL,
+    ER INT NOT NULL,
+    SO INT NOT NULL,
+    BB INT NOT NULL,
+    HBP INT NOT NULL,
+    IBB INT NOT NULL,
+  --  STUFF_PLUS NUMERIC(5,1),
+  --  FIP NUMERIC(7,3),
+    SV INT NOT NULL,
+    WAR NUMERIC(5,2),
+    LAST_UPDATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(PITCHER_ID, GAME_DATE),
+    FOREIGN KEY(PITCHER_ID) REFERENCES PITCHER_INFO_DIM(PITCHER_ID)
 
 
-'BATTER_EXTRA_STATS': {
-    
-    'columns': '(HITTER_ID, GAME_DATE, IBB, RBIS, RUNS, SB, WAR)',
-    'values': '(%s, %s, %s, %s, %s, %s, %s)',
-    'conflict': '(HITTER_ID, GAME_DATE)',
-    'conflict_updates': ['IBB', 'RBIS', 'RUNS', 'SB', 'WAR']
-},
+
+);
+        """
+    },
+
+    'WOBA_CONSTANTS': {
+
+        'columns': '(Season, wOBA, wOBAScale, wBB, wHBP, w1B, w2B, w3B, wHR, runSB, runCS, R_PA, R_W, cFIP)',
+        'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+        'conflict': '(Season)',
+        'conflict_updates': ['wOBA', 'wOBAScale', 'wBB', 'wHBP', 'w1B', 'w2B', 'w3B', 'wHR', 'runSB', 'runCS', 'R_PA',
+                             'R_W', 'cFIP'],
+        'temp_table': """
+        
+        CREATE TABLE IF NOT EXISTS TEMP_WOBA_CONSTANTS(
+    Season INT PRIMARY KEY,
+    wOBA NUMERIC(4,3) NOT NULL,
+    wOBAScale NUMERIC(4,3) NOT NULL,
+    wBB NUMERIC(4,3) NOT NULL,
+    wHBP NUMERIC(4,3) NOT NULL,
+    w1B NUMERIC(4,3) NOT NULL,
+    w2B NUMERIC(4,3) NOT NULL,
+    w3B NUMERIC(4,3) NOT NULL,
+    wHR NUMERIC(4,3) NOT NULL,
+    runSB NUMERIC(4,3) NOT NULL,
+    runCS NUMERIC(4,3) NOT NULL,
+    R_PA NUMERIC(4,3) NOT NULL,
+    R_W NUMERIC(5,3) NOT NULL,
+    cFIP NUMERIC(5,3) NOT NULL,
+    LAST_UPDATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 
 
-'PITCHER_EXTRA_STATS': {
-    
-    'columns': '(PITCHER_ID, GAME_DATE, WINS, LOSSES, IP, ER, SO, BB, HBP, IBB, SV, WAR)',
-    'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-    'conflict': '(PITCHER_ID, GAME_DATE)',
-    'conflict_updates': ['WINS', 'LOSSES',  'IP', 'ER', 'SO', 'BB', 'HBP', 'IBB', 'SV', 'WAR' ]
-},
-
-'WOBA_CONSTANTS': {
-
-    'columns': '(Season, wOBA, wOBAScale, wBB, wHBP, w1B, w2B, w3B, wHR, runSB, runCS, R_PA, R_W, cFIP)',
-    'values': '(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-    'conflict': '(Season)',
-    'conflict_updates': ['wOBA', 'wOBAScale', 'wBB', 'wHBP', 'w1B', 'w2B', 'w3B', 'wHR', 'runSB', 'runCS', 'R_PA', 'R_W', 'cFIP']
-}
-
+);
+        
+        """
+    }
 }
 
 
@@ -193,6 +410,13 @@ def load_fangraphs_woba_constants():
 
     return df
 
+def extract_name(html):
+    pattern = re.compile(r'>(.*?)<')
+    match = pattern.search(html)
+    return match.group(1) if match else None
+
+
+
 def get_batter_stats_by_game(SEASON):
     date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
     full_df = pd.DataFrame()
@@ -200,6 +424,7 @@ def get_batter_stats_by_game(SEASON):
     for date in date_range:
 
         if datetime.now().date() > date.date():
+            name = []
             player_id = []
             ibb = []
             rbi = []
@@ -211,6 +436,7 @@ def get_batter_stats_by_game(SEASON):
             date = date.strftime("%Y-%m-%d")
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason='
+            print(f'Requesting URL={url}')
             response = requests.get(url)
 
             k = response.json()
@@ -224,6 +450,7 @@ def get_batter_stats_by_game(SEASON):
                     war.append(row['WAR'])
                     runs.append(row['R'])
                     pa.append(row['PA'])
+                    name.append(extract_name(row['Name']))
 
                 df_dict = {'player': player_id,
                            'ibb': ibb,
@@ -231,7 +458,8 @@ def get_batter_stats_by_game(SEASON):
                            'sb': sb,
                            'war': war,
                            'runs': runs,
-                           'pa': pa}
+                           'pa': pa,
+                           'name': name}
 
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
@@ -249,6 +477,7 @@ def get_batter_stats_by_game(SEASON):
             war = []
             runs = []
             pa = []
+            name = []
 
             date = date.strftime("%Y-%m-%d")
             print(date)
@@ -266,6 +495,7 @@ def get_batter_stats_by_game(SEASON):
                     war.append(row['WAR'])
                     runs.append(row['R'])
                     pa.append(row['PA'])
+                    name.append(extract_name(row['Name']))
 
                 df_dict = {'player': player_id,
                            'ibb': ibb,
@@ -273,7 +503,8 @@ def get_batter_stats_by_game(SEASON):
                            'sb': sb,
                            'war': war,
                            'runs': runs,
-                           'pa': pa}
+                           'pa': pa,
+                           'name': name}
 
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
@@ -293,6 +524,7 @@ def get_batter_stats_by_game(SEASON):
 def get_pitcher_stats_by_game(SEASON):
     date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
     full_df = pd.DataFrame()
+    int_columns = ['player', 'wins', 'losses', 'so', 'hbp', 'er', 'sv', 'ibb', 'bb']
     for date in date_range:
         
         if datetime.now().date() > date.date():
@@ -309,6 +541,7 @@ def get_pitcher_stats_by_game(SEASON):
             sv = []
             war = []
             ibb = []
+            name = []
         
             date = date.strftime("%Y-%m-%d")
             print(date)
@@ -332,6 +565,7 @@ def get_pitcher_stats_by_game(SEASON):
                     er.append(row['ER'])
                     war.append(row['WAR'])
                     ibb.append(row['IBB'])
+                    name.append(extract_name(row['Name']))
                     
                     
                 df_dict = {'player': player_id,
@@ -344,7 +578,8 @@ def get_pitcher_stats_by_game(SEASON):
                            'sv': sv,
                            'er': er,
                            'war': war,
-                           'ibb': ibb}
+                           'ibb': ibb,
+                           'name': name}
                 
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
@@ -369,6 +604,7 @@ def get_pitcher_stats_by_game(SEASON):
             sv = []
             war = []
             ibb = []
+            name = []
         
             date = date.strftime("%Y-%m-%d")
             print(date)
@@ -380,6 +616,7 @@ def get_pitcher_stats_by_game(SEASON):
         
             if 'data' in k.keys():
                 for row in k['data']:
+                    
                     player_id.append(row['xMLBAMID'])
                     wins.append(row['W'])
                     losses.append(row['L'])
@@ -392,6 +629,7 @@ def get_pitcher_stats_by_game(SEASON):
                     er.append(row['ER'])
                     war.append(row['WAR'])
                     ibb.append(row['IBB'])
+                    name.append(extract_name(row['Name']))
                     
                     
                 df_dict = {'player': player_id,
@@ -404,13 +642,17 @@ def get_pitcher_stats_by_game(SEASON):
                            'sv': sv,
                            'er': er,
                            'war': war,
-                           'ibb': ibb}
+                           'ibb': ibb,
+                           'name': name}
                 
                 df = pd.DataFrame(df_dict)
                 df['date'] = date
                 print(df)
                 full_df = pd.concat([full_df, df])
-   
+    
+    for col in int_columns:
+        full_df[col] = full_df[col].astype(int)
+
         
     return full_df
 
@@ -452,160 +694,6 @@ def test_postgres_connection():
     except psycopg2.Error as e:
         print("Error connecting to PostgreSQL:", e)
         raise  # raise error for error
-
-def load_all_game_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT game_pk FROM GAME_INFO_DIM;"
-        game_pks = pd.read_sql(sql, conn)
-
-        print("Game PKS Loaded")
-        return game_pks  # Return the connection object if successful
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_all_hitter_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT hitter_id, hitter_name FROM HITTER_INFO_DIM;"
-        hitter_pks = pd.read_sql(sql, conn)
-
-        print("Hitter PKS Loaded")
-        return hitter_pks  # Return the connection object if successful
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_all_pitcher_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT pitcher_id, pitcher_name FROM PITCHER_INFO_DIM;"
-        pitcher_pks = pd.read_sql(sql, conn)
-
-        print("Pitcher PKS Loaded")
-        return pitcher_pks  # Return the connection object if successful
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_all_pitch_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT PITCH_ID FROM PITCH_INFO_FACT;"
-        pitch_pks = pd.read_sql(sql, conn)
-
-        print("Pitch PKS Loaded")
-        return pitch_pks
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_all_hit_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT HIT_ID FROM HIT_INFO_DIM;"
-        hit_pks = pd.read_sql(sql, conn)
-
-        print("Hit PKS Loaded")
-        return hit_pks
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_all_play_pk():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT PLAY_ID FROM PLAY_INFO_DIM;"
-        play_pks = pd.read_sql(sql, conn)
-
-        print("Play PKS Loaded")
-        return play_pks
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
-
-def load_pitch_table_game_pks():
-    try:
-        # Define connection parameters
-        conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
-
-        sql = "SELECT DISTINCT PITCH_ID from PITCH_INFO_FACT;"
-        fct_game_pks = pd.read_sql(sql, conn)
-
-        print("Fact tbl game PKS Loaded")
-        return fct_game_pks
-
-    except psycopg2.Error as e:
-        print("Error w/ PostgreSQL:", e)
-        raise  # raise error for error
-
 
 def run_sql_file(file_path: str):
     """Executes an SQL file in PostgreSQL using psycopg2."""
@@ -650,11 +738,11 @@ def run_sql_file(file_path: str):
 def loading_other_batter_stats_non_null():
     data = get_batter_stats_by_game(START_YEAR)
 
-    return data[['player', 'date', 'ibb', 'rbi', 'runs', 'sb', 'war']]
+    return data[[ 'name','player', 'date', 'ibb', 'rbi', 'runs', 'sb', 'war']]
 
 def loading_other_pitching_stats_non_null():
     data = get_pitcher_stats_by_game(SEASON=START_YEAR)
-    return data[['player', 'date', 'wins', 'losses', 'ip', 'er', 'so', 'bb', 'hbp', 'ibb', 'sv', 'war']]
+    return data[[ 'name', 'player', 'date', 'wins', 'losses', 'ip', 'er', 'so', 'bb', 'hbp', 'ibb', 'sv', 'war']]
 
 ########################################################################################################################
 # Data Transformation Functions
@@ -680,11 +768,7 @@ def hit_value_column(value):
     }
     return value_dict.get(value, 0)
 
-def transform_game_data(df: pd.DataFrame, games: pd.DataFrame):
-    # Filter out existing games
-
-    df = df[~df['game_pk'].isin(games['game_pk'])]
-
+def transform_game_data(df: pd.DataFrame):
     # Filter out spring training and exhibitions
     df = df[~df['game_type'].isin(['S', 'E'])]
 
@@ -693,47 +777,25 @@ def transform_game_data(df: pd.DataFrame, games: pd.DataFrame):
    # game_info['game_date'] = game_info['game_date'].astype(str)
     return game_info
 
-def transform_hitter_data(df: pd.DataFrame, hitters: pd.DataFrame):
 
-    df = df[~df['game_type'].isin(['S', 'E'])]
-    # Hitter Info for Dim
-    hitter_info = df[~df['batter'].isin(hitters['hitter_id']) & ~df['des'].str.contains("challenge", case=False, na=False)]
-    hitter_info = hitter_info[~hitter_info['batter'].isin(hitters['hitter_id']) & ~hitter_info['des'].str.contains("review", case=False, na=False)]
-    hitter_info = hitter_info[~hitter_info['batter'].isin(hitters['hitter_id']) & ~hitter_info['des'].str.contains("steal", case=False, na=False)]
-    hitter_info = hitter_info[~hitter_info['batter'].isin(hitters['hitter_id']) & ~hitter_info['des'].str.contains("umpire", case=False, na=False)]
-    hitter_info = hitter_info[~hitter_info['batter'].isin(hitters['hitter_id']) & ~hitter_info['des'].str.contains("caught", case=False, na=False)]
-    hitter_info = hitter_info[~hitter_info['batter'].isin(hitters['hitter_id']) & ~hitter_info['des'].str.contains("pickoff", case=False, na=False)]
-    hitter_info['hitter_name'] = hitter_info['des'].str.split().str[:2].str.join(' ')
-    hitter_info = hitter_info[['batter', 'hitter_name']].drop_duplicates()
-    hitter_info.rename(columns={'batter': 'hitter_id'}, inplace=True)
-    hitter_info = hitter_info.drop_duplicates(subset=['hitter_id'], keep='first')
-    return hitter_info
+# takes in fg data 
+def transform_pitcher_data(df: pd.DataFrame):
 
-def transform_pitcher_data(df: pd.DataFrame, pitchers: pd.DataFrame):
-
-    df = df[~df['game_type'].isin(['S', 'E'])]
     # Pitcher Info for Dim
-    pitcher_info = df[~df['pitcher'].isin(pitchers['pitcher_id']) ]
-    pitcher_info = pitcher_info[['pitcher', 'player_name']].drop_duplicates()
-    pitcher_info.rename(columns={'pitcher': 'pitcher_id', 'player_name': 'pitcher_name'}, inplace=True)
+    pitcher_info = df[['player', 'name']].drop_duplicates()
+    pitcher_info.rename(columns={'player': 'pitcher_id', 'name': 'pitcher_name'}, inplace=True)
     return pitcher_info
 
-def transform_pitcher_data_for_hitter_table(df: pd.DataFrame, pitchers: pd.DataFrame, hitters: pd.DataFrame, new_hitters: pd.DataFrame):
-    
-    df = df[~df['game_type'].isin(['S', 'E'])]
-    # Pitcher Info for Dim
-    pitcher_info = df[~df['pitcher'].isin(pitchers['pitcher_id']) ]
-    pitcher_info = pitcher_info[['pitcher', 'player_name']].drop_duplicates()
-    pitcher_info.rename(columns={'pitcher': 'pitcher_id', 'player_name': 'pitcher_name'}, inplace=True)
-    
-    pitcher_info_for_hitter_table = pitcher_info[~pitcher_info['pitcher_id'].isin(hitters['hitter_id']) ]
-    pitcher_info_for_hitter_table = pitcher_info_for_hitter_table[~pitcher_info_for_hitter_table['pitcher_id'].isin(new_hitters['hitter_id']) ]
-    
-    pitcher_info_for_hitter_table.rename(columns={'pitcher_id': 'hitter_id', 'pitcher_name': 'hitter_name'})
-    
-    return pitcher_info_for_hitter_table
+def transform_hitter_data(df: pd.DataFrame):
 
-def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFrame):
+    # Pitcher Info for Dim
+    hitter_info = df[['player', 'name']].drop_duplicates()
+    hitter_info.rename(columns={'player': 'hitter_id', 'name': 'hitter_name'}, inplace=True)
+    return hitter_info
+
+
+
+def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame):
 
     # create pitch ID
     full_pitch_by_pitch["PITCH_ID"] = (
@@ -753,7 +815,6 @@ def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFra
     full_pitch_by_pitch['HITTER_TEAM'] = full_pitch_by_pitch.apply(lambda x: x['away_team'] if x['inning_topbot'] == 'Top' else x['home_team'], axis=1)
     full_pitch_by_pitch['PITCHER_TEAM'] = full_pitch_by_pitch.apply(lambda x: x['home_team'] if x['inning_topbot'] == 'Top' else x['away_team'], axis=1)
 
-    full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch["PITCH_ID"].isin(pitch_df['pitch_id'])]
     full_pitch_by_pitch = full_pitch_by_pitch.drop_duplicates(subset=['PITCH_ID'], keep='first')
 
     full_pitch_by_pitch['COUNT'] = full_pitch_by_pitch['balls'].astype(str) + '-' + full_pitch_by_pitch['strikes'].astype(str)
@@ -845,7 +906,7 @@ def transform_pitch_data(full_pitch_by_pitch: pd.DataFrame, pitch_df: pd.DataFra
     print(len(full_pitch_by_pitch[full_pitch_by_pitch["batter"] == 620454]))
     return pitch_info
     
-def transform_hit_data(full_pitch_by_pitch: pd.DataFrame, hit_df: pd.DataFrame ):
+def transform_hit_data(full_pitch_by_pitch: pd.DataFrame ):
 
     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_type'].isin(['S', 'E'])]
 
@@ -859,8 +920,6 @@ def transform_hit_data(full_pitch_by_pitch: pd.DataFrame, hit_df: pd.DataFrame )
     full_pitch_by_pitch["inning_topbot"].astype(str),
     np.nan
     )
-
-    full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch["HIT_ID"].isin(hit_df['hit_id'])]
 
 # Filter and rename columns
     hit_data = (full_pitch_by_pitch
@@ -883,7 +942,7 @@ def transform_hit_data(full_pitch_by_pitch: pd.DataFrame, hit_df: pd.DataFrame )
 
     return hit_data
 
-def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame):
+def transform_play_data(full_pitch_by_pitch: pd.DataFrame):
 
     full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch['game_type'].isin(['S', 'E'])]
 
@@ -899,7 +958,6 @@ def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame
     full_pitch_by_pitch["inning_topbot"].astype(str)
     )
 
-    full_pitch_by_pitch = full_pitch_by_pitch[~full_pitch_by_pitch["PLAY_ID"].isin(play_df['play_id'])]
     full_pitch_by_pitch = full_pitch_by_pitch.drop_duplicates(subset=['PLAY_ID'], keep='first')
 
     
@@ -926,6 +984,13 @@ def transform_play_data(full_pitch_by_pitch: pd.DataFrame, play_df: pd.DataFrame
 ########################################################################################################################
 def load_tables_many(df: pd.DataFrame, table_name):
     try:
+
+        df = df.replace({np.NaN: None})
+
+
+
+        columns = TABLE_TABLE_COLUMN_INSERT_DICT[table_name][
+            'columns']
         # Define connection parameters
         conn = psycopg2.connect(
             dbname="MLB_DATA",
@@ -937,31 +1002,24 @@ def load_tables_many(df: pd.DataFrame, table_name):
 
         cursor = conn.cursor()
 
-        # Define the columns and values format from the dictionary
-        columns = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['columns']
-        values = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['values']
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False, header=False, na_rep='\\N')
+        csv_buffer.seek(0)
 
+        # Build COPY SQL command
+        copy_sql = f"""
+        COPY {table_name} {columns}
+        FROM STDIN
+        WITH CSV
+        DELIMITER ','
+        NULL '\\N';
+        """
 
-        #needed for pscyopg2 to insert null values
-        df = df.replace({np.NaN: None})
-
-        # Convert numpy.int64 to Python int for the dataframe values
-        def convert_types(row):
-            return tuple(int(value) if isinstance(value, np.int64) else value for value in row)
-
-        # Convert the dataframe rows to a list of tuples with appropriate type handling
-        data = [convert_types(x) for x in df.itertuples(index=False, name=None)]
-
-        # SQL query with placeholders (%s)
-        sql = f'INSERT INTO {table_name} {columns} VALUES {values};'
-
-        print(sql)  # Debugging: print the query
-
-        # Execute batch insert
-        cursor.executemany(sql, data)
-
-        # Commit and close the connection
+        print("Executing COPY command...")
+        cursor.copy_expert(sql=copy_sql, file=csv_buffer)
         conn.commit()
+        print(f"Data copied successfully to RDS Table {table_name}")
+
         cursor.close()
         conn.close()
 
@@ -970,60 +1028,80 @@ def load_tables_many(df: pd.DataFrame, table_name):
         print("Error w/ PostgreSQL:", e)
         raise  # raise error for further handling
 
+
 def load_tables_many_on_conflict(df: pd.DataFrame, table_name):
+    
+    drop_name_tables = ['PITCHER_EXTRA_STATS', 'BATTER_EXTRA_STATS']
+    
+    if table_name in drop_name_tables:
+        df = df.drop(columns=['name'])
     try:
-        # Define connection parameters
+        # Setup DB connection
         conn = psycopg2.connect(
-            dbname="MLB_DATA",
-            user="user",
-            password="password",
-            host="postgres",
-            port="5432"
-        )
+                dbname="MLB_DATA",
+                user="user",
+                password="password",
+                host="postgres",
+                port="5432"
+            )
 
         cursor = conn.cursor()
 
-        # Get column and query formatting info from your dictionary
-        columns = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['columns']      # e.g., "(HITTER_ID, GAME_DATE, IBB, RBIS, RUNS, SB, WAR)"
-        values = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['values']        # e.g., "(%s, %s, %s, %s, %s, %s, %s)"
-        conflict = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['conflict']    # e.g., "(HITTER_ID, GAME_DATE)"
-        conflict_updates = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]['conflict_updates']  # e.g., ["IBB", "RBIS", "RUNS", "SB", "WAR"]
+        # Replace NaN with NULL marker for PostgreSQL COPY
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False, header=False, na_rep='\\N')
+        csv_buffer.seek(0)
 
-        # Replace NaNs with None for psycopg2 compatibility
-        df = df.replace({np.NaN: None})
+        # Get metadata
+        meta = TABLE_TABLE_COLUMN_INSERT_DICT[table_name]
+        columns = meta['columns']
+        conflict = meta['conflict']
+        conflict_updates = meta['conflict_updates']
+        temp_table_sql = meta['temp_table']
 
-        # Convert numpy types to native Python types
-        def convert_types(row):
-            return tuple(int(v) if isinstance(v, np.integer) else v for v in row)
-
-        data = [convert_types(row) for row in df.itertuples(index=False, name=None)]
-
-        # Build the SQL insert statement
-        sql = f'INSERT INTO {table_name} {columns} VALUES {values} ON CONFLICT {conflict} DO UPDATE SET '
-        sql += ', '.join([f'{col} = EXCLUDED.{col}' for col in conflict_updates]) + ';'
-
-        print(f"Prepared SQL:\n{sql}\n")
-
-        # Execute each row individually, skipping rows that violate FK constraints
-        skipped = 0
-        for row in data:
-            try:
-                cursor.execute(sql, row)
-                conn.commit()
-            except psycopg2.errors.ForeignKeyViolation:
-                print(f"Skipping row due to FK violation: {row}")
-                conn.rollback()
-                skipped += 1
-                continue
-
+        # Create TEMP TABLE
+        print("Creating temporary table...")
+        cursor.execute(temp_table_sql)
         conn.commit()
-        cursor.close()
-        conn.close()
 
-        print(f'Success! Inserted {len(data) - skipped} rows. Skipped {skipped} due to FK violations.')
+        # Copy from buffer into TEMP table
+        print("Copying data into temporary table...")
+        copy_sql = f"""
+        COPY TEMP_{table_name} {columns}
+        FROM STDIN
+        WITH CSV
+        DELIMITER ','
+        NULL '\\N';
+        """
+        cursor.copy_expert(copy_sql, csv_buffer)
+        conn.commit()
+
+        # Insert from temp table into target with ON CONFLICT DO UPDATE
+        update_clause = ', '.join([f"{col} = EXCLUDED.{col}" for col in conflict_updates])
+        insert_sql = f"""
+        INSERT INTO {table_name} {columns}
+        SELECT  {str(columns).replace('(', '').replace(')', '')} FROM TEMP_{table_name}
+        ON CONFLICT {conflict} DO UPDATE SET
+        {update_clause};
+        """
+
+        print(insert_sql)
+
+        print("Merging data into target table...")
+        cursor.execute(insert_sql)
+        conn.commit()
+
+        # Drop temp table
+        cursor.execute(f"DROP TABLE TEMP_{table_name};")
+        conn.commit()
+
+        print("Data loaded and merged successfully.")
 
     except psycopg2.Error as e:
         print("Error w/ PostgreSQL:", e)
+        conn.rollback()
+        cursor.execute(f"DROP TABLE TEMP_{table_name};")
+        conn.commit()
         raise
 ########################################################################################################################
 
@@ -1112,76 +1190,34 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         )
         
         connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task  >> load_pitching_stats_task 
-
-    with TaskGroup("Load-DB-Current-DW-Info") as get_current_dw_info:
-        game_pks = PythonOperator(
-            task_id='load_all_game_pk',
-            python_callable=load_all_game_pk,
-            dag=dag
-        )
-        hitters_pks = PythonOperator(
-            task_id='load_all_hitter_pk',
-            python_callable=load_all_hitter_pk,
-            dag=dag
-        )
-        pitcher_pks = PythonOperator(
-            task_id='load_all_pitcher_pk',
-            python_callable=load_all_pitcher_pk,
-            dag=dag
-        )
-        pitch_pks = PythonOperator(
-            task_id='load_pitch_pks',
-            python_callable=load_all_pitch_pk,
-            dag=dag
-        )
-
-        hit_pks = PythonOperator(
-            task_id='load_hit_pks',
-            python_callable=load_all_hit_pk,
-            dag=dag
-        )
-
-        play_pks = PythonOperator(
-            task_id='load_play_pks',
-            python_callable=load_all_play_pk,
-            dag=dag
-        )
-        game_pks >> hitters_pks >> pitcher_pks >> hit_pks >> play_pks >> pitch_pks
     
 
     with TaskGroup("Transform-Loaded-Savant-Data") as transform_savant_data:
         transform_game_data_step = PythonOperator(
             task_id='transform_game_data',
             python_callable=transform_game_data,
-            op_args=[get_pybabseball_data.output, game_pks.output],
+            op_args=[get_pybabseball_data.output],
             dag=dag
         )
 
         transform_hitter_data_step = PythonOperator(
             task_id='transform_hitter_data',
             python_callable=transform_hitter_data,
-            op_args=[get_pybabseball_data.output,hitters_pks.output],
+            op_args=[load_batting_stats_task.output,],
             dag=dag
         )
 
         transform_pitcher_data_step = PythonOperator(
             task_id='transform_pitcher_data',
             python_callable=transform_pitcher_data,
-            op_args=[get_pybabseball_data.output, pitcher_pks.output],
-            dag=dag
-        )
-        
-        transform_pitcher_for_hitter_table_step = PythonOperator(
-            task_id='transform_pitcher_data_for_hitter_table',
-            python_callable=transform_pitcher_data_for_hitter_table,
-            op_args=[get_pybabseball_data.output, pitcher_pks.output,hitters_pks.output, transform_hitter_data_step.output],
+            op_args=[load_pitching_stats_task.output],
             dag=dag
         )
         
         transform_pitch_data_step = PythonOperator(
             task_id='transform_pitch_data',
             python_callable=transform_pitch_data,
-            op_args=[get_pybabseball_data.output, pitch_pks.output ],
+            op_args=[get_pybabseball_data.output],
             dag=dag
         
         )
@@ -1189,65 +1225,65 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         transform_hit_data_step = PythonOperator(
             task_id='transform_hit_data',
             python_callable=transform_hit_data,
-            op_args=[get_pybabseball_data.output, hit_pks.output]
+            op_args=[get_pybabseball_data.output]
         )
         
         transform_play_data_step = PythonOperator(
             task_id='transform_play_data',
             python_callable=transform_play_data,
-            op_args=[get_pybabseball_data.output, play_pks.output],
+            op_args=[get_pybabseball_data.output],
             dag=dag
         )
 
 
-        transform_game_data_step >> transform_hitter_data_step >> transform_pitcher_data_step >> transform_pitcher_for_hitter_table_step >>   transform_hit_data_step  >> transform_play_data_step >> transform_pitch_data_step
+        transform_game_data_step  >> transform_pitcher_data_step  >> transform_hitter_data_step >>   transform_hit_data_step  >> transform_play_data_step >> transform_pitch_data_step
     
     with TaskGroup("Load-MLB-DW-Tables") as load_dw_tables:
         load_game_table = PythonOperator(
             task_id='load-game-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_game_data_step.output, 'GAME_INFO_DIM'],
             dag=dag
         )
         load_hitter_table = PythonOperator(
             task_id='load-hitter-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_hitter_data_step.output, 'HITTER_INFO_DIM'],
             dag=dag
         )    
         
-        load_hitter_table_w_pitchers = PythonOperator(
-            task_id='load-hitters-table-for-pitchers',
-            python_callable=load_tables_many,
-            op_args=[transform_pitcher_for_hitter_table_step.output, 'HITTER_INFO_DIM' ],
-            dag=dag
-        )
+        # load_hitter_table_w_pitchers = PythonOperator(
+        #     task_id='load-hitters-table-for-pitchers',
+        #     python_callable=load_tables_many,
+        #     op_args=[transform_pitcher_for_hitter_table_step.output, 'HITTER_INFO_DIM' ],
+        #     dag=dag
+        # )
         load_pitcher_table = PythonOperator(
             task_id='load-pitcher-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_pitcher_data_step.output, 'PITCHER_INFO_DIM'],
             dag=dag
         )
         load_pitch_table = PythonOperator(
             task_id='load-pitch-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_pitch_data_step.output, 'PITCH_INFO_FACT'],
             dag=dag
         )
         load_hit_table = PythonOperator(
             task_id='load-hit-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_hit_data_step.output, 'HIT_INFO_DIM'],
             dag=dag
         )
         load_play_table = PythonOperator(
             task_id='load-play-table',
-            python_callable=load_tables_many,
+            python_callable=load_tables_many_on_conflict,
             op_args=[transform_play_data_step.output, 'PLAY_INFO_DIM'],
             dag=dag
         )
         
-        load_game_table >> load_hitter_table >>  load_hitter_table_w_pitchers >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
+        load_game_table >> load_hitter_table >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
     with TaskGroup("Load-Stats-Tables") as load_stats_stats:
         load_woba_constants_table_task = PythonOperator(
@@ -1271,4 +1307,4 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         )
         
         load_woba_constants_table_task >> load_non_null_info_task >> load_non_null_pitchers_task
-    load_statcast_data_group >> get_current_dw_info >> transform_savant_data >> load_dw_tables >> load_stats_stats >> [slack_success, slack_failure]
+    load_statcast_data_group >> transform_savant_data >> load_dw_tables >> load_stats_stats >> [slack_success, slack_failure]

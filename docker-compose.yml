@@ -47,42 +47,42 @@ x-airflow-common:
 
 
 services:
-  my_custom_container:
-    # image: mlb-predict
-    build:
-      context: ./streamlit
-      dockerfile: Dockerfile
-    container_name: streamlit-app
-    restart: always
-    ports:
-      - "8051:8051"
-    depends_on:
-      - postgres
-    networks:
-      - my_network
-    env_file:
-      - ./streamlit/.env
-    volumes:
-      - ./team_logos:/home/mlb_images/team_logos
+  # my_custom_container:
+  #   # image: mlb-predict
+  #   build:
+  #     context: ./streamlit
+  #     dockerfile: Dockerfile
+  #   container_name: streamlit-app
+  #   restart: always
+  #   ports:
+  #     - "8051:8051"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - my_network
+  #   env_file:
+  #     - ./streamlit/.env
+  #   volumes:
+  #     - ./team_logos:/home/mlb_images/team_logos
   
-  mlflow:
-    build:
-      context: ./mlflow
-      dockerfile: Dockerfile
-    ports:
-    - "5000:5000"
-    - "5001:5001"  # MLFlow Model Serving
-    environment:
-      MLFLOW_TRACKING_URI: http://0.0.0.0:5000
-    container_name: mlflow
-    restart: always
-    networks:
-      - my_network
-    env_file:
-      - ./mlflow/.env
-    volumes:
-      - ./mlflow/mlartifacts:/mlartifacts
-      - ./mlflow/mlruns:/mlruns
+  # mlflow:
+  #   build:
+  #     context: ./mlflow
+  #     dockerfile: Dockerfile
+  #   ports:
+  #   - "5000:5000"
+  #   - "5001:5001"  # MLFlow Model Serving
+  #   environment:
+  #     MLFLOW_TRACKING_URI: http://0.0.0.0:5000
+  #   container_name: mlflow
+  #   restart: always
+  #   networks:
+  #     - my_network
+  #   env_file:
+  #     - ./mlflow/.env
+  #   volumes:
+  #     - ./mlflow/mlartifacts:/mlartifacts
+  #     - ./mlflow/mlruns:/mlruns
 
   postgres:
     image: postgres:17
@@ -105,18 +105,18 @@ services:
     networks:
       - my_network
   
-  jupyter-notebook:
-    build:
-      context: ./jupyter
-      dockerfile: Dockerfile
-    container_name: jupyter-notebook
-    restart: always
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./jupyter/notebooks:/app
-    networks:
-      - my_network
+  # jupyter-notebook:
+  #   build:
+  #     context: ./jupyter
+  #     dockerfile: Dockerfile
+  #   container_name: jupyter-notebook
+  #   restart: always
+  #   ports:
+  #     - "8888:8888"
+  #   volumes:
+  #     - ./jupyter/notebooks:/app
+  #   networks:
+  #     - my_network
     
   grafana-mlb:
     image: grafana/grafana:11.6.0
@@ -132,28 +132,28 @@ services:
     networks:
       - my_network
 
-  metabase:
-    image: metabase/metabase:v0.46.8
-    restart: always
-    container_name: metabase
-    environment:
-      MB_DB_TYPE: "postgres"
-      MB_DB_DBNAME: "MLB_DATA"
-      MB_DB_PORT: "5432"
-      MB_DB_USER: "user"
-      MB_DB_PASS: "password"
-      MB_DB_HOST: "postgres"
-      MB_PASSWORD_COMPLEXITY: strong
-      MB_PASSWORD_LENGTH: 10
-   #   JAVA_TIMEZONE: "${MB_JAVA_TIMEZONE}"
-    ports:
-      - 4000:3000
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    networks:
-      - my_network
-    depends_on:
-      - postgres
+  # metabase:
+  #   image: metabase/metabase:v0.46.8
+  #   restart: always
+  #   container_name: metabase
+  #   environment:
+  #     MB_DB_TYPE: "postgres"
+  #     MB_DB_DBNAME: "MLB_DATA"
+  #     MB_DB_PORT: "5432"
+  #     MB_DB_USER: "user"
+  #     MB_DB_PASS: "password"
+  #     MB_DB_HOST: "postgres"
+  #     MB_PASSWORD_COMPLEXITY: strong
+  #     MB_PASSWORD_LENGTH: 10
+  #  #   JAVA_TIMEZONE: "${MB_JAVA_TIMEZONE}"
+  #   ports:
+  #     - 4000:3000
+  #   extra_hosts:
+  #     - host.docker.internal:host-gateway
+  #   networks:
+  #     - my_network
+  #   depends_on:
+  #     - postgres
 
 
   redis:
@@ -367,11 +367,53 @@ services:
         condition: service_completed_successfully
     networks:
       - my_network   
+  spark-master:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_MASTER_WEBUI_PORT=8080
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - spark-data:/bitnami
+      - ./spark/apps:/opt/spark-apps
+      - ./spark/data:/opt/spark-data
+    networks:
+      - my_network
+
+  spark-worker:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - spark-data:/bitnami
+      - ./spark/apps:/opt/spark-apps
+      - ./spark/data:/opt/spark-data
+    depends_on:
+      - spark-master
+    networks:
+      - my_network
+      
 volumes:
   pgdata:
-  metabase-data:
+  # metabase-data:
   grafana_data:
+  spark-data:
 
 networks:
   my_network:
     driver: bridge
+
+
