@@ -9,3 +9,4 @@
 airflow/.env
 mlflow/.env
 streamlit/.env
+/mlb-venv-outside

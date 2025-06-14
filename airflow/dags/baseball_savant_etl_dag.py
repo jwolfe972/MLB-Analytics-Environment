@@ -74,7 +74,7 @@ cache.disable()
  # VARIABLES
 ########################################################################################################################
 START_DATE = '2025-01-01'
-#END_DATE = '2023-12-31'
+#END_DATE = '2022-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -415,10 +415,8 @@ def extract_name(html):
     match = pattern.search(html)
     return match.group(1) if match else None
 
-
-
 def get_batter_stats_by_game(SEASON):
-    date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
+    date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-31')
     full_df = pd.DataFrame()
     int_columns = ['player', 'ibb', 'rbi', 'sb', 'runs']
     for date in date_range:
@@ -466,7 +464,7 @@ def get_batter_stats_by_game(SEASON):
                 print(df)
                 full_df = pd.concat([full_df, df])
 
-    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
+    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-12-01')
     for date in playoffs_range:
 
         if datetime.now().date() > date.date():
@@ -522,7 +520,7 @@ def get_batter_stats_by_game(SEASON):
     return full_df
 
 def get_pitcher_stats_by_game(SEASON):
-    date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-01')
+    date_range = pd.date_range(start=f'{SEASON}-03-01', end=f'{SEASON}-10-31')
     full_df = pd.DataFrame()
     int_columns = ['player', 'wins', 'losses', 'so', 'hbp', 'er', 'sv', 'ibb', 'bb']
     for date in date_range:
@@ -587,7 +585,7 @@ def get_pitcher_stats_by_game(SEASON):
                 full_df = pd.concat([full_df, df])
    
    
-    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-11-30')
+    playoffs_range = pd.date_range(start=f'{SEASON}-10-01', end=f'{SEASON}-12-01')
     for date in playoffs_range:
         
         if datetime.now().date() > date.date():
@@ -1252,12 +1250,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )    
         
-        # load_hitter_table_w_pitchers = PythonOperator(
-        #     task_id='load-hitters-table-for-pitchers',
-        #     python_callable=load_tables_many,
-        #     op_args=[transform_pitcher_for_hitter_table_step.output, 'HITTER_INFO_DIM' ],
-        #     dag=dag
-        # )
         load_pitcher_table = PythonOperator(
             task_id='load-pitcher-table',
             python_callable=load_tables_many_on_conflict,
