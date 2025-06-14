@@ -10,3 +10,4 @@ airflow/.env
 mlflow/.env
 streamlit/.env
 /mlb-venv-outside
+/data_exports
