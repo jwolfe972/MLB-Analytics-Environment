@@ -74,7 +74,7 @@ cache.disable()
  # VARIABLES
 ########################################################################################################################
 START_DATE = '2025-01-01'
-#END_DATE = '2022-12-31'
+#END_DATE = '2016-12-31'
 END_DATE = datetime.now().strftime('%Y-%m-%d')
 
 start_date_dt = datetime.strptime(START_DATE, '%Y-%m-%d')
@@ -382,6 +382,8 @@ def load_fangraphs_woba_constants():
     # Step 1: Fetch the page content
     url = 'https://www.fangraphs.com/guts.aspx?type=cn'
     response = requests.get(url)
+    
+    print(f'{response.status_code}')
 
     # Step 2: Parse the page content with BeautifulSoup
     soup = BeautifulSoup(response.content, 'html.parser')
@@ -436,6 +438,7 @@ def get_batter_stats_by_game(SEASON):
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason='
             print(f'Requesting URL={url}')
             response = requests.get(url)
+            print(f'Response {response.status_code}')
 
             k = response.json()
 
@@ -481,7 +484,7 @@ def get_batter_stats_by_game(SEASON):
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=bat&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason=1'
             response = requests.get(url)
-
+            print(f'Response {response.status_code}')
             k = response.json()
 
             if 'data' in k.keys():
@@ -545,7 +548,7 @@ def get_pitcher_stats_by_game(SEASON):
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=pit&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason='
             response = requests.get(url)
-
+            print(f'Response {response.status_code}')
             k = response.json()
             
         
@@ -608,7 +611,7 @@ def get_pitcher_stats_by_game(SEASON):
             print(date)
             url = f'https://www.fangraphs.com/api/leaders/major-league/data?age=&pos=all&stats=pit&lg=all&qual=0&season={SEASON}&season1={SEASON}&startdate={date}&enddate={date}&month=1000&pageitems=20000&ind=0&postseason=1'
             response = requests.get(url)
-
+            print(f'Response {response.status_code}')
             k = response.json()
             
         
@@ -1155,13 +1158,13 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
 
-        extract_woba_constants_task = PythonOperator(
-            task_id='extract_woba_constants-task',
-            python_callable=load_fangraphs_woba_constants,
-            retries=3,
-            retry_delay=timedelta(seconds=30),
-            dag=dag
-        )
+        # extract_woba_constants_task = PythonOperator(
+        #     task_id='extract_woba_constants-task',
+        #     python_callable=load_fangraphs_woba_constants,
+        #     retries=3,
+        #     retry_delay=timedelta(seconds=30),
+        #     dag=dag
+        # )
         get_pybabseball_data = PythonOperator(
             task_id='load_statcast_data',
             python_callable=load_statcast_data,
@@ -1187,8 +1190,8 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
         
-        connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task  >> load_pitching_stats_task 
-    
+       # connection >> execute_sql_file_for_creation >> extract_woba_constants_task  >>  get_pybabseball_data >> load_batting_stats_task  >> load_pitching_stats_task
+        connection >> execute_sql_file_for_creation  >> get_pybabseball_data >> load_batting_stats_task >> load_pitching_stats_task
 
     with TaskGroup("Transform-Loaded-Savant-Data") as transform_savant_data:
         transform_game_data_step = PythonOperator(
@@ -1278,12 +1281,12 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
         load_game_table >> load_hitter_table >> load_pitcher_table >> load_hit_table >> load_play_table >> load_pitch_table
 
     with TaskGroup("Load-Stats-Tables") as load_stats_stats:
-        load_woba_constants_table_task = PythonOperator(
-            task_id='load-woba-constants-table',
-            python_callable=load_tables_many_on_conflict,
-            op_args=[extract_woba_constants_task.output, 'WOBA_CONSTANTS' ]
-        )
-        
+        # load_woba_constants_table_task = PythonOperator(
+        #     task_id='load-woba-constants-table',
+        #     python_callable=load_tables_many_on_conflict,
+        #     op_args=[extract_woba_constants_task.output, 'WOBA_CONSTANTS' ]
+        # )
+        #
         load_non_null_pitchers_task = PythonOperator(
             task_id='load-pitcher-stats',
             python_callable=load_tables_many_on_conflict,
@@ -1298,5 +1301,6 @@ with DAG(dag_id='baseball-savant-etl-workflow',schedule_interval="30 9 * * *", d
             dag=dag
         )
         
-        load_woba_constants_table_task >> load_non_null_info_task >> load_non_null_pitchers_task
+       # load_woba_constants_table_task >> load_non_null_info_task >> load_non_null_pitchers_task
+        load_non_null_info_task >> load_non_null_pitchers_task
     load_statcast_data_group >> transform_savant_data >> load_dw_tables >> load_stats_stats >> [slack_success, slack_failure]
